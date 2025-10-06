@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
+}
+
+ body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: #646cff;
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  a:hover {
+    color: #747bff;
+  }
+  button {
+    background-color: #f9f9f9;
+  }
+}
+
+/* stag animation */
+/* Stag appear + glow */
+@keyframes appear {
+  0% { opacity: 0; transform: scale(0.5) translateY(50px); filter: blur(15px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+}
+
+@keyframes glow {
+  0% { transform: scale(1); filter: drop-shadow(0 0 20px #a0e0ff); }
+  100% { transform: scale(1.05); filter: drop-shadow(0 0 40px #a0e0ff); }
+}
+
+.stag {
+  animation: appear 2s forwards, glow 2s infinite alternate;
+  position: absolute;
+  z-index: 20;
+}
+
+/* Particle smoke */
+@keyframes smoke {
+  0% { opacity: 1; transform: scale(0.5); }
+  100% { opacity: 0; transform: scale(2) translateY(-50px); }
+}
+
+.particle {
+  width: 6px;
+  height: 6px;
+  background-color: rgba(160,224,255,0.5);
+  border-radius: 50%;
+  position: absolute;
+  animation: smoke 4s linear forwards;
+}
+
+/* Sparkle / star shape */
+.sparkle {
+  width: 8px;
+  height: 8px;
+  background-color: rgba(255,255,255,0.8);
+  clip-path: polygon(
+    50% 0%, 61% 35%, 98% 35%, 68% 57%, 
+    79% 91%, 50% 70%, 21% 91%, 32% 57%, 
+    2% 35%, 39% 35%
+  );
+  position: absolute;
+  animation: smoke 3s linear infinite;
+}
