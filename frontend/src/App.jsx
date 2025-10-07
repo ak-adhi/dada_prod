@@ -38,7 +38,7 @@ export default function App() {
         <div className="flex items-center gap-4">
           {/* GitHub icon (top-left) */}
           <a
-            href="https://github.com/ak-adhi/DADA_project.git"
+            href="https://github.com/ak-adhi/dada_prod.git"
             target="_blank"
             rel="noreferrer"
             aria-label="Open GitHub repo"
