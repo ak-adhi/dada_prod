@@ -1,0 +1,39 @@
+{
+  "models": [
+    {
+      "id": "ollama",
+      "name": "Ollama (Academic)",
+      "description": "Used for academic and research content.",
+      "attacks_tested": ["Data Exfiltration", "Prompt Injection", "Social Engineering"],
+      "defense_score": 0.78
+    },
+    {
+      "id": "qwen",
+      "name": "Qwen (Banking)",
+      "description": "Deployed for financial assistant tasks in banking.",
+      "attacks_tested": ["Data Exfiltration", "Privacy Violation", "Model Misuse"],
+      "defense_score": 0.81
+    },
+    {
+      "id": "mistral",
+      "name": "Mistral (Car Rental)",
+      "description": "Used in car rental customer service chatbots.",
+      "attacks_tested": ["Prompt Injection", "Social Engineering", "Model Misuse"],
+      "defense_score": 0.74
+    },
+    {
+      "id": "vicuna",
+      "name": "Vicuna (Insurance)",
+      "description": "Used for insurance claim analysis and chat support.",
+      "attacks_tested": ["Social Engineering", "Privacy Violation", "Data Exfiltration"],
+      "defense_score": 0.69
+    },
+    {
+      "id": "deepseek",
+      "name": "DeepSeek (Hospitality)",
+      "description": "Hospitality assistant for hotels and customer booking queries.",
+      "attacks_tested": ["Prompt Injection", "Privacy Violation", "Social Engineering"],
+      "defense_score": 0.83
+    }
+  ]
+}
