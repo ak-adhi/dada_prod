@@ -83,3 +83,6 @@ appendonly.aof
 *.swp
 *.bak
 *.tmp
+
+# Large LLM files
+/backend/llms/mistral_7b/model

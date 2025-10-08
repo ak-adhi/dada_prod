@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Mistral 7B Test</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    textarea { width: 100%; height: 100px; }
+    pre { background: #f0f0f0; padding: 1rem; white-space: pre-wrap; min-height: 100px; }
+    button { padding: 0.5rem 1rem; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Mistral 7B Test</h1>
+  <textarea id="prompt" placeholder="Type your prompt here..."></textarea>
+  <br>
+  <button onclick="sendPrompt()">Send</button>
+
+  <h3>Response:</h3>
+  <pre id="response"></pre>
+
+  <script>
+    async function sendPrompt() {
+      const prompt = document.getElementById("prompt").value;
+      const responseEl = document.getElementById("response");
+      responseEl.textContent = "Loading...";
+
+      try {
+        const res = await fetch("http://localhost:8080/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, max_tokens: 800 })
+        });
+
+        if (!res.ok) {
+          responseEl.textContent = "Error: " + res.status + " " + res.statusText;
+          return;
+        }
+
+        const data = await res.json();
+
+        // Extract the actual response text from the API
+        let text = "";
+        if (data.content) {
+          text = data.content;
+        } else if (data.choices && data.choices.length > 0) {
+          text = data.choices[0].text || "";
+        }
+
+        responseEl.textContent = text.trim();
+
+      } catch (err) {
+        responseEl.textContent = "Error: " + err.message;
+      }
+    }
+  </script>
+</body>
+</html>
