@@ -3,14 +3,17 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-"scripts": {
-  "start": "node server.js"
-},
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node db/seed_results.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "cors": "^2.8.5",
-    "express": "^5.1.0"
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "pg": "^8.16.3"
   }
 }
