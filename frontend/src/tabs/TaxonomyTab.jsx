@@ -11,21 +11,29 @@ export default function TaxonomyTab() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    console.log("Starting to load CSV...");
+    
     // Load and parse CSV file
     fetch("/consolidated_prompt_injection_attacks.csv")
       .then((response) => {
+        console.log("CSV fetch response:", response.status);
         if (!response.ok) {
-          throw new Error("Failed to load CSV file");
+          throw new Error(`Failed to load CSV file (Status: ${response.status})`);
         }
         return response.text();
       })
       .then((csvText) => {
+        console.log("CSV loaded, length:", csvText.length);
+        console.log("First 200 chars:", csvText.substring(0, 200));
         const parsed = Papa.parse(csvText, {
           header: true,
           dynamicTyping: true,
           skipEmptyLines: true,
           transformHeader: (header) => header.trim(),
         });
+
+        console.log("Parsed data:", parsed.data.length, "rows");
+        console.log("Sample row:", parsed.data[0]);
 
         // Group attacks by family
         const familiesMap = new Map();
@@ -52,6 +60,9 @@ export default function TaxonomyTab() {
         });
 
         const families = Array.from(familiesMap.values());
+        console.log("Families created:", families.length);
+        console.log("Family names:", families.map(f => f.name));
+        
         setAttacksData({ families });
 
         // Transform data for D3 tree
@@ -86,32 +97,37 @@ export default function TaxonomyTab() {
       // Clear previous SVG content
       d3.select(svgRef.current).selectAll("*").remove();
 
-      const margin = { top: 40, right: 120, bottom: 40, left: 120 };
-      const width = 1400 - margin.left - margin.right;
-      const height = 700 - margin.top - margin.bottom;
+      const width = 1400;
+      const height = 700;
 
       const svg = d3
         .select(svgRef.current)
-        .attr("width", width + margin.left + margin.right)
-        .attr("height", height + margin.top + margin.bottom);
+        .attr("width", width)
+        .attr("height", height);
 
-      const g = svg
-        .append("g")
-        .attr("transform", `translate(${margin.left},${margin.top})`);
+      const g = svg.append("g");
 
-      // Add zoom behavior
-      const zoom = d3.zoom().scaleExtent([0.3, 3]).on("zoom", (event) => {
-        g.attr("transform", event.transform);
-      });
+      // Add zoom and pan behavior
+      const zoom = d3.zoom()
+        .scaleExtent([0.1, 4])
+        .on("zoom", (event) => {
+          g.attr("transform", event.transform);
+        });
 
       svg.call(zoom);
 
-      const tree = d3.tree().size([width, height - 100]);
+      // Set initial transform
+      const initialTransform = d3.zoomIdentity.translate(width / 2, 50).scale(0.8);
+      svg.call(zoom.transform, initialTransform);
+
+      const tree = d3.tree()
+        .size([width - 200, height - 200])
+        .separation((a, b) => (a.parent === b.parent ? 1 : 1.5));
 
       let i = 0;
 
       const root = d3.hierarchy(treeData);
-      root.x0 = width / 2;
+      root.x0 = 0;
       root.y0 = 0;
 
       // Collapse all children initially
@@ -136,7 +152,7 @@ export default function TaxonomyTab() {
 
         // Normalize for fixed-depth
         nodes.forEach((d) => {
-          d.y = d.depth * 180;
+          d.y = d.depth * 200;
         });
 
         // Update nodes
@@ -148,25 +164,29 @@ export default function TaxonomyTab() {
           .append("g")
           .attr("class", "node")
           .attr("transform", (d) => `translate(${source.x0},${source.y0})`)
+          .call(d3.drag()
+            .on("start", dragstarted)
+            .on("drag", dragged)
+            .on("end", dragended))
           .on("click", click);
 
         nodeEnter
           .append("rect")
           .attr("class", "node-rect")
-          .attr("width", 140)
-          .attr("height", 70)
-          .attr("x", -70)
-          .attr("y", -35)
+          .attr("width", 160)
+          .attr("height", 80)
+          .attr("x", -80)
+          .attr("y", -40)
           .attr("rx", 5)
           .style("fill", "white")
           .style("stroke", "#4A90E2")
           .style("stroke-width", "2")
-          .style("cursor", "pointer");
+          .style("cursor", "move");
 
         nodeEnter
           .append("text")
           .attr("class", "node-text")
-          .style("fill-opacity", 1e-6)
+          .style("fill", "black")
           .style("font-size", "10px")
           .style("font-weight", "500")
           .style("text-anchor", "middle")
@@ -175,7 +195,7 @@ export default function TaxonomyTab() {
             const textElement = d3.select(this);
             const name = d.data.name || "";
             const words = name.split(/[\s\n]+/);
-            const maxCharsPerLine = 18;
+            const maxCharsPerLine = 20;
             let currentLine = [];
             let lines = [];
 
@@ -193,14 +213,14 @@ export default function TaxonomyTab() {
               lines.push(currentLine.join(" "));
             }
 
-            // Limit to 3 lines
-            lines = lines.slice(0, 3);
+            // Limit to 4 lines
+            lines = lines.slice(0, 4);
 
             lines.forEach((line, i) => {
               textElement.append("tspan")
                 .attr("x", 0)
                 .attr("dy", i === 0 ? `-${(lines.length - 1) * 0.5}em` : "1.1em")
-                .text(line);
+                .text(line.length > 22 ? line.substring(0, 20) + "..." : line);
             });
           });
 
@@ -212,15 +232,19 @@ export default function TaxonomyTab() {
           .duration(750)
           .attr("transform", (d) => `translate(${d.x},${d.y})`);
 
-        nodeUpdate.select("text").style("fill-opacity", 1);
-
         nodeUpdate
           .select("rect")
           .on("mouseenter", function () {
-            d3.select(this).style("fill", "#f0f7ff").style("stroke-width", "3");
+            d3.select(this)
+              .style("fill", "#f0f7ff")
+              .style("stroke-width", "3")
+              .style("stroke", "#2196F3");
           })
           .on("mouseleave", function () {
-            d3.select(this).style("fill", "white").style("stroke-width", "2");
+            d3.select(this)
+              .style("fill", "white")
+              .style("stroke-width", "2")
+              .style("stroke", "#4A90E2");
           });
 
         // Exit
@@ -230,8 +254,6 @@ export default function TaxonomyTab() {
           .duration(750)
           .attr("transform", (d) => `translate(${source.x},${source.y})`)
           .remove();
-
-        nodeExit.select("text").style("fill-opacity", 1e-6);
 
         // Update links
         const link = g.selectAll(".link").data(links, (d) => d.id);
@@ -245,7 +267,7 @@ export default function TaxonomyTab() {
             return diagonal(o, o);
           })
           .style("fill", "none")
-          .style("stroke", "#333")
+          .style("stroke", "#999")
           .style("stroke-width", "2");
 
         const linkUpdate = linkEnter.merge(link);
@@ -272,6 +294,9 @@ export default function TaxonomyTab() {
       }
 
       function click(event, d) {
+        // Prevent drag from triggering click
+        if (event.defaultPrevented) return;
+        
         if (d.children) {
           d._children = d.children;
           d.children = null;
@@ -282,7 +307,57 @@ export default function TaxonomyTab() {
         update(d);
       }
 
+      function dragstarted(event, d) {
+        d3.select(this).raise();
+        event.sourceEvent.stopPropagation();
+      }
+
+      function dragged(event, d) {
+        // Calculate the offset
+        const dx = event.x - d.x;
+        const dy = event.y - d.y;
+        
+        // Update position of dragged node
+        d.x = event.x;
+        d.y = event.y;
+        
+        // Move the node
+        d3.select(this).attr("transform", `translate(${d.x},${d.y})`);
+        
+        // Update all descendant positions
+        if (d.descendants) {
+          d.descendants().forEach(descendant => {
+            if (descendant !== d) {
+              descendant.x += dx;
+              descendant.y += dy;
+              
+              // Update descendant visual position
+              g.selectAll(".node")
+                .filter(node => node === descendant)
+                .attr("transform", `translate(${descendant.x},${descendant.y})`);
+            }
+          });
+        }
+        
+        // Update all links
+        g.selectAll(".link").attr("d", link => diagonal(link, link.parent));
+      }
+
+      function dragended(event, d) {
+        // Save the new position for this node and all descendants
+        d.x0 = d.x;
+        d.y0 = d.y;
+        
+        if (d.descendants) {
+          d.descendants().forEach(descendant => {
+            descendant.x0 = descendant.x;
+            descendant.y0 = descendant.y;
+          });
+        }
+      }
+
       function diagonal(s, d) {
+        if (!d) return "";
         return `M ${s.x} ${s.y}
                 C ${s.x} ${(s.y + d.y) / 2},
                   ${d.x} ${(s.y + d.y) / 2},
