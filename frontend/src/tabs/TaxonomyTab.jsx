@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import * as d3 from "d3";
+<<<<<<< Updated upstream
 import Papa from "papaparse";
+=======
+import attacksData from "../data/attacks.json";
+>>>>>>> Stashed changes
 import modelsData from "../data/models.json";
 
 export default function TaxonomyTab() {
@@ -11,6 +15,7 @@ export default function TaxonomyTab() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+<<<<<<< Updated upstream
     console.log("Starting to load CSV...");
     
     // Load and parse CSV file
@@ -31,6 +36,27 @@ export default function TaxonomyTab() {
           skipEmptyLines: true,
           transformHeader: (header) => header.trim(),
         });
+=======
+    // Transform data for D3 tree
+    const transformedData = {
+      name: "LLM Attacks",
+      children: attacksData.families.map((family) => ({
+        name: family.name,
+        description: family.description,
+        children: family.attacks.map((attack) => ({
+          name: attack.title,
+          severity: attack.severity,
+          description: attack.description,
+          children: modelsData.models
+            .filter((model) => model.attacks_tested.includes(family.name))
+            .map((model) => ({
+              name: `${model.name}\n(Defense: ${model.defense_score})`,
+              description: model.description,
+            })),
+        })),
+      })),
+    };
+>>>>>>> Stashed changes
 
         console.log("Parsed data:", parsed.data.length, "rows");
         console.log("Sample row:", parsed.data[0]);
@@ -93,6 +119,7 @@ export default function TaxonomyTab() {
   useEffect(() => {
     if (!treeData || viewMode !== "tree") return;
 
+<<<<<<< Updated upstream
     try {
       // Clear previous SVG content
       d3.select(svgRef.current).selectAll("*").remove();
@@ -366,6 +393,197 @@ export default function TaxonomyTab() {
     } catch (err) {
       console.error("Error rendering tree:", err);
       setError(err.message);
+=======
+    // Clear previous SVG content
+    d3.select(svgRef.current).selectAll("*").remove();
+
+    const margin = { top: 40, right: 120, bottom: 40, left: 120 };
+    const width = 1400 - margin.left - margin.right;
+    const height = 700 - margin.top - margin.bottom;
+
+    const svg = d3
+      .select(svgRef.current)
+      .attr("width", width + margin.left + margin.right)
+      .attr("height", height + margin.top + margin.bottom);
+
+    const g = svg
+      .append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Add zoom behavior
+    const zoom = d3.zoom().scaleExtent([0.3, 3]).on("zoom", (event) => {
+      g.attr("transform", event.transform);
+    });
+
+    svg.call(zoom);
+
+    const tree = d3.tree().size([width, height - 100]);
+
+    let i = 0;
+
+    const root = d3.hierarchy(treeData);
+    root.x0 = width / 2;
+    root.y0 = 0;
+
+    // Collapse all children initially
+    root.children.forEach(collapse);
+
+    function collapse(d) {
+      if (d.children) {
+        d._children = d.children;
+        d._children.forEach(collapse);
+        d.children = null;
+      }
+    }
+
+    update(root);
+
+    function update(source) {
+      const treeLayout = tree(root);
+      const nodes = treeLayout.descendants();
+      const links = treeLayout.descendants().slice(1);
+
+      // Normalize for fixed-depth
+      nodes.forEach((d) => {
+        d.y = d.depth * 180;
+      });
+
+      // Update nodes
+      const node = g.selectAll(".node").data(nodes, (d) => d.id || (d.id = ++i));
+
+      // Enter new nodes
+      const nodeEnter = node
+        .enter()
+        .append("g")
+        .attr("class", "node")
+        .attr("transform", (d) => `translate(${source.x0},${source.y0})`)
+        .on("click", click);
+
+      nodeEnter
+        .append("rect")
+        .attr("class", "node-rect")
+        .attr("width", 140)
+        .attr("height", 70)
+        .attr("x", -70)
+        .attr("y", -35)
+        .attr("rx", 5)
+        .style("fill", "white")
+        .style("stroke", "#4A90E2")
+        .style("stroke-width", "2")
+        .style("cursor", "pointer");
+
+      nodeEnter
+        .append("text")
+        .attr("class", "node-text")
+        .attr("dy", ".35em")
+        .text((d) => d.data.name)
+        .style("fill-opacity", 1e-6)
+        .style("font-size", "11px")
+        .style("font-weight", "500")
+        .style("text-anchor", "middle")
+        .style("pointer-events", "none")
+        .call(wrap, 130);
+
+      // Update
+      const nodeUpdate = nodeEnter.merge(node);
+
+      nodeUpdate
+        .transition()
+        .duration(750)
+        .attr("transform", (d) => `translate(${d.x},${d.y})`);
+
+      nodeUpdate.select("text").style("fill-opacity", 1);
+
+      nodeUpdate
+        .select("rect")
+        .on("mouseenter", function() {
+          d3.select(this).style("fill", "#f0f7ff").style("stroke-width", "3");
+        })
+        .on("mouseleave", function() {
+          d3.select(this).style("fill", "white").style("stroke-width", "2");
+        });
+
+      // Exit
+      const nodeExit = node
+        .exit()
+        .transition()
+        .duration(750)
+        .attr("transform", (d) => `translate(${source.x},${source.y})`)
+        .remove();
+
+      nodeExit.select("text").style("fill-opacity", 1e-6);
+
+      // Update links
+      const link = g.selectAll(".link").data(links, (d) => d.id);
+
+      const linkEnter = link
+        .enter()
+        .insert("path", "g")
+        .attr("class", "link")
+        .attr("d", (d) => {
+          const o = { x: source.x0, y: source.y0 };
+          return diagonal(o, o);
+        })
+        .style("fill", "none")
+        .style("stroke", "#333")
+        .style("stroke-width", "2");
+
+      const linkUpdate = linkEnter.merge(link);
+
+      linkUpdate
+        .transition()
+        .duration(750)
+        .attr("d", (d) => diagonal(d, d.parent));
+
+      link
+        .exit()
+        .transition()
+        .duration(750)
+        .attr("d", (d) => {
+          const o = { x: source.x, y: source.y };
+          return diagonal(o, o);
+        })
+        .remove();
+
+      nodes.forEach((d) => {
+        d.x0 = d.x;
+        d.y0 = d.y;
+      });
+    }
+
+    function click(event, d) {
+      if (d.children) {
+        d._children = d.children;
+        d.children = null;
+      } else {
+        d.children = d._children;
+        d._children = null;
+      }
+      update(d);
+    }
+
+    function diagonal(s, d) {
+      return `M ${s.x} ${s.y}
+              C ${s.x} ${(s.y + d.y) / 2},
+                ${d.x} ${(s.y + d.y) / 2},
+                ${d.x} ${d.y}`;
+    }
+
+    function wrap(text, width) {
+      text.each(function () {
+        const text = d3.select(this);
+        const words = text.text().split(/\n/);
+        text.text(null);
+
+        words.forEach((word, i) => {
+          text
+            .append("tspan")
+            .attr("x", 0)
+            .attr("dy", i === 0 ? "-0.3em" : "1.2em")
+            .text(word);
+        });
+      });
+>>>>>>> Stashed changes
     }
   }, [treeData, viewMode]);
 
@@ -382,6 +600,7 @@ export default function TaxonomyTab() {
     }
   };
 
+<<<<<<< Updated upstream
   if (error) {
     return (
       <div style={{ padding: "20px", color: "red" }}>
@@ -397,6 +616,9 @@ export default function TaxonomyTab() {
   }
 
   if (!treeData || !attacksData) {
+=======
+  if (!treeData) {
+>>>>>>> Stashed changes
     return <div style={{ padding: "20px" }}>Loading...</div>;
   }
 
@@ -463,7 +685,11 @@ export default function TaxonomyTab() {
 
           {attacksData.families.map((family, index) => (
             <div
+<<<<<<< Updated upstream
               key={index}
+=======
+              key={family.id}
+>>>>>>> Stashed changes
               style={{
                 marginBottom: "30px",
                 border: "2px solid #4A90E2",
@@ -484,7 +710,11 @@ export default function TaxonomyTab() {
                   {index + 1}. {family.name}
                 </h3>
                 <p style={{ margin: 0, color: "#666", fontSize: "14px" }}>
+<<<<<<< Updated upstream
                   {family.attacks.length} attack{family.attacks.length !== 1 ? "s" : ""} in this family
+=======
+                  {family.description}
+>>>>>>> Stashed changes
                 </p>
               </div>
 
@@ -530,7 +760,11 @@ export default function TaxonomyTab() {
                           backgroundColor: getSeverityColor(attack.severity),
                         }}
                       >
+<<<<<<< Updated upstream
                         {attack.severity.toUpperCase()} ({attack.severityScore}/10)
+=======
+                        {attack.severity.toUpperCase()}
+>>>>>>> Stashed changes
                       </span>
                     </div>
 
@@ -538,7 +772,36 @@ export default function TaxonomyTab() {
                       {attack.description}
                     </p>
 
+<<<<<<< Updated upstream
                     {/* Source */}
+=======
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "6px",
+                        flexWrap: "wrap",
+                        marginTop: "8px",
+                      }}
+                    >
+                      {attack.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          style={{
+                            padding: "2px 8px",
+                            backgroundColor: "#e3f2fd",
+                            color: "#1976d2",
+                            borderRadius: "4px",
+                            fontSize: "11px",
+                            fontWeight: "500",
+                          }}
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Models tested */}
+>>>>>>> Stashed changes
                     <div
                       style={{
                         marginTop: "10px",
@@ -547,10 +810,22 @@ export default function TaxonomyTab() {
                       }}
                     >
                       <strong style={{ fontSize: "12px", color: "#666" }}>
+<<<<<<< Updated upstream
                         Source:{" "}
                       </strong>
                       <span style={{ fontSize: "12px", color: "#666" }}>
                         {attack.source}
+=======
+                        Tested on:{" "}
+                      </strong>
+                      <span style={{ fontSize: "12px", color: "#666" }}>
+                        {modelsData.models
+                          .filter((model) =>
+                            model.attacks_tested.includes(family.name)
+                          )
+                          .map((model) => model.name)
+                          .join(", ")}
+>>>>>>> Stashed changes
                       </span>
                     </div>
                   </div>
@@ -567,7 +842,11 @@ export default function TaxonomyTab() {
                 }}
               >
                 <strong style={{ fontSize: "13px", color: "#4A90E2" }}>
+<<<<<<< Updated upstream
                   Models to be tested against {family.name}:
+=======
+                  Models defending against {family.name}:
+>>>>>>> Stashed changes
                 </strong>
                 <div
                   style={{
@@ -577,6 +856,7 @@ export default function TaxonomyTab() {
                     flexWrap: "wrap",
                   }}
                 >
+<<<<<<< Updated upstream
                   {modelsData.models.map((model) => (
                     <span
                       key={model.id}
@@ -592,6 +872,27 @@ export default function TaxonomyTab() {
                       {model.name} (Defense: {model.defense_score})
                     </span>
                   ))}
+=======
+                  {modelsData.models
+                    .filter((model) =>
+                      model.attacks_tested.includes(family.name)
+                    )
+                    .map((model) => (
+                      <span
+                        key={model.id}
+                        style={{
+                          padding: "6px 12px",
+                          backgroundColor: "white",
+                          border: "1px solid #4A90E2",
+                          borderRadius: "6px",
+                          fontSize: "12px",
+                          color: "#333",
+                        }}
+                      >
+                        {model.name} ({model.defense_score})
+                      </span>
+                    ))}
+>>>>>>> Stashed changes
                 </div>
               </div>
             </div>
