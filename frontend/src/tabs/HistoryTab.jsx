@@ -1,73 +1,33 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import Visualizations from '../components/Visualizations';
 
 export default function HistoryTab() {
   const [loading, setLoading] = useState(false);
+
+  // Filter lists provided by the API
   const [filters, setFilters] = useState({
     models: ['All'],
     usecases: ['All'],
     families: ['All'],
-    successes: ['All', 'True', 'False'],
   });
 
+  // Current selections
   const [selectedModel, setSelectedModel] = useState('All');
   const [selectedUsecase, setSelectedUsecase] = useState('All');
   const [selectedFamily, setSelectedFamily] = useState('All');
-  const [selectedSuccess, setSelectedSuccess] = useState('All');
+  const [selectedSuccess, setSelectedSuccess] = useState('All'); // All | True | False
 
+  // Summary + data
   const [summary, setSummary] = useState(null);
-  const [rows, setRows] = useState([]);
+  const [rows, setRows] = useState([]);      // respects Success filter
+  const [rowsAll, setRowsAll] = useState([]); // ignores Success filter (for bar denominators)
+
+  // Row expansion state
   const [open, setOpen] = useState({}); // rowId -> boolean
-
-  const fetchHistory = async (
-    m = selectedModel,
-    u = selectedUsecase,
-    f = selectedFamily,
-    s = selectedSuccess
-  ) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        model: m || 'All',
-        usecase: u || 'All',
-        family: f || 'All',
-        success: s || 'All',
-      });
-      const res = await fetch(`/api/history?${params.toString()}`);
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Failed to load history');
-
-      setFilters(
-        data.filters || {
-          models: ['All'],
-          usecases: ['All'],
-          families: ['All'],
-          successes: ['All', 'True', 'False'],
-        }
-      );
-      setSummary(data.summary || null);
-      setRows(data.data || []);
-      setOpen({}); // collapse all on refresh
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchHistory('All', 'All', 'All', 'All'); // initial
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    fetchHistory(selectedModel, selectedUsecase, selectedFamily, selectedSuccess);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModel, selectedUsecase, selectedFamily, selectedSuccess]);
+  const toggled = (id) => setOpen((o) => ({ ...o, [id]: !o[id] }));
 
   const truncate = (text, n = 100) =>
     !text ? '' : text.length > n ? text.slice(0, n).trim() + '…' : text;
-
-  const toggled = (id) => setOpen((o) => ({ ...o, [id]: !o[id] }));
 
   const statusBadge = (success) => (
     <span
@@ -88,6 +48,63 @@ export default function HistoryTab() {
     return `${num.toFixed(2)} ms`;
   };
 
+  // Fetch history (two calls: one with Success filter, one with success=All)
+  const fetchHistory = async (
+    m = selectedModel,
+    u = selectedUsecase,
+    f = selectedFamily,
+    s = selectedSuccess
+  ) => {
+    setLoading(true);
+    try {
+      const base = { model: m || 'All', usecase: u || 'All', family: f || 'All' };
+
+      const qsFiltered = new URLSearchParams({ ...base, success: s || 'All' });
+      const qsAll = new URLSearchParams({ ...base, success: 'All' });
+
+      const [resFiltered, resAll] = await Promise.all([
+        fetch(`/api/history?${qsFiltered.toString()}`),
+        fetch(`/api/history?${qsAll.toString()}`),
+      ]);
+
+      const [dataFiltered, dataAll] = await Promise.all([
+        resFiltered.json(),
+        resAll.json(),
+      ]);
+
+      if (!dataFiltered.success) throw new Error(dataFiltered.error || 'Failed to load history');
+      if (!dataAll.success) throw new Error(dataAll.error || 'Failed to load history (all)');
+
+      setFilters({
+        models: dataFiltered.filters?.models || ['All'],
+        usecases: dataFiltered.filters?.usecases || ['All'],
+        families: dataFiltered.filters?.families || ['All'],
+      });
+
+      setSummary(dataFiltered.summary || null);
+      setRows(dataFiltered.data || []);
+      setRowsAll(dataAll.data || []);
+      setOpen({}); // collapse all on refresh or filter change
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial load defaults to All/All/All/All
+  useEffect(() => {
+    fetchHistory('All', 'All', 'All', 'All');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-fetch whenever a filter changes
+  useEffect(() => {
+    fetchHistory(selectedModel, selectedUsecase, selectedFamily, selectedSuccess);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedModel, selectedUsecase, selectedFamily, selectedSuccess]);
+
+  // Summary cards
   const Summary = useMemo(() => {
     if (!summary) return null;
     const cards = [
@@ -98,7 +115,7 @@ export default function HistoryTab() {
       { label: 'Avg Latency', value: `${Number(summary.avg_latency || 0).toFixed(2)} ms` },
     ];
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-2">
         {cards.map((c) => (
           <div
             key={c.label}
@@ -111,6 +128,15 @@ export default function HistoryTab() {
       </div>
     );
   }, [summary]);
+
+  // Reset to default “All” on Refresh
+  const onRefresh = () => {
+    setSelectedModel('All');
+    setSelectedUsecase('All');
+    setSelectedFamily('All');
+    setSelectedSuccess('All');
+    fetchHistory('All', 'All', 'All', 'All');
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -145,7 +171,7 @@ export default function HistoryTab() {
         <div>
           <label className="block text-xs text-gray-600 mb-1">Attack Family</label>
           <select
-            className="border rounded px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue max-w-[22rem]"
+            className="border rounded px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
             value={selectedFamily}
             onChange={(e) => setSelectedFamily(e.target.value)}
           >
@@ -162,17 +188,17 @@ export default function HistoryTab() {
             value={selectedSuccess}
             onChange={(e) => setSelectedSuccess(e.target.value)}
           >
-            {filters.successes?.map((s) => (
+            {['All', 'True', 'False'].map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
         </div>
 
         <button
-          onClick={() => fetchHistory(selectedModel, selectedUsecase, selectedFamily, selectedSuccess)}
+          onClick={onRefresh}
           className="h-[38px] px-4 rounded border border-brand-blue bg-white text-brand-blue hover:bg-gray-50"
           disabled={loading}
-          title="Refresh results"
+          title="Refresh (resets filters to All)"
         >
           {loading ? 'Loading…' : 'Refresh'}
         </button>
@@ -180,6 +206,26 @@ export default function HistoryTab() {
 
       {/* Summary cards */}
       {Summary}
+
+      {/* Visualization area */}
+      <div className="rounded-lg border border-gray-200 bg-white p-3">
+        <div className="text-sm font-medium text-brand-blue mb-2">
+          Visualizations (auto-updates with filters)
+        </div>
+        <Visualizations
+          rows={rows}          // respects Success filter
+          rowsAll={rowsAll}    // ignores Success filter (for bar denominators)
+          selected={{
+            model: selectedModel,
+            usecase: selectedUsecase,
+            family: selectedFamily,
+            success: selectedSuccess,
+          }}
+        />
+      </div>
+
+      {/* Event Log header */}
+      <div className="text-sm font-medium text-brand-blue">Event Log</div>
 
       {/* Event Log Table */}
       <div className="overflow-auto rounded-lg border border-gray-200 bg-white">
@@ -208,7 +254,7 @@ export default function HistoryTab() {
                     <td className="px-3 py-2">{r.model}</td>
                     <td className="px-3 py-2">{r.usecase}</td>
                     <td className="px-3 py-2">{r.attack_family}</td>
-                    <td className="px-3 py-2">{r.attack_name || 'unknown'}</td>
+                    <td className="px-3 py-2">{r.attack_name ?? '—'}</td>
                     <td className="px-3 py-2">{statusBadge(r.success)}</td>
                     <td className="px-3 py-2">{fmtLatency(r.latency)}</td>
                     <td className="px-3 py-2 text-gray-700">
@@ -230,6 +276,7 @@ export default function HistoryTab() {
                     </td>
                   </tr>
 
+                  {/* Expandable details */}
                   {isOpen && (
                     <tr className="bg-gray-50">
                       <td className="px-3 py-3" colSpan={10}>
