@@ -313,3 +313,12 @@ ON dada.eval_results (attack_prompt, model_name, usecase);
 -- helpful filter index
 CREATE INDEX IF NOT EXISTS idx_eval_results_model_usecase
 ON dada.eval_results (model_name, usecase);
+
+-- === schema updates for new data shape ===
+ALTER TABLE IF EXISTS dada.eval_results
+  ADD COLUMN IF NOT EXISTS attack_name TEXT;
+
+-- optional but useful for filtering
+CREATE INDEX IF NOT EXISTS idx_eval_results_family_success
+  ON dada.eval_results (attack_family, attack_success);
+
