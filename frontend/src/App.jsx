@@ -3,7 +3,7 @@ import MainTab from './tabs/MainTab';
 import ChatTab from './tabs/ChatTab';
 import HistoryTab from './tabs/HistoryTab';
 import TaxonomyTab from './tabs/TaxonomyTab';
-import TeamTab from './tabs/TeamTab';
+import AboutTab from './tabs/AboutTab';
 import ChatWidget from './components/ChatWidget';
 
 export default function App() {
@@ -84,7 +84,7 @@ export default function App() {
             { id: 'chat', label: 'Chat' },
             { id: 'dashboard', label: 'Results Dashboard' },
             { id: 'taxonomy', label: 'Taxonomy' },
-            { id: 'team', label: 'Meet the Team' },
+            { id: 'About', label: 'About DADA' },
           ].map((tab) => (
             <li key={tab.id}>
               <button
@@ -110,7 +110,7 @@ export default function App() {
           {activeTab === 'chat' && <ChatTab />}
           {activeTab === 'dashboard' && <HistoryTab />}
           {activeTab === 'taxonomy' && <TaxonomyTab />}
-          {activeTab === 'team' && <TeamTab />}
+          {activeTab === 'About' && <AboutTab />}
         </div>
       </main>
 
