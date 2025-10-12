@@ -9,18 +9,21 @@ export default function HistoryTab() {
     models: ['All'],
     usecases: ['All'],
     families: ['All'],
+    successes: ['All', 'True', 'False'],
+    defences: ['False', 'True'], // no "All"
   });
 
-  // Current selections
+  // Current selections (Defence defaults to False)
   const [selectedModel, setSelectedModel] = useState('All');
   const [selectedUsecase, setSelectedUsecase] = useState('All');
   const [selectedFamily, setSelectedFamily] = useState('All');
-  const [selectedSuccess, setSelectedSuccess] = useState('All'); // All | True | False
+  const [selectedSuccess, setSelectedSuccess] = useState('All');   // All | True | False
+  const [selectedDefence, setSelectedDefence] = useState('False'); // False | True
 
   // Summary + data
   const [summary, setSummary] = useState(null);
-  const [rows, setRows] = useState([]);      // respects Success filter
-  const [rowsAll, setRowsAll] = useState([]); // ignores Success filter (for bar denominators)
+  const [rows, setRows] = useState([]);       // respects Success + Defence
+  const [rowsAll, setRowsAll] = useState([]); // ignores Success (but respects Defence)
 
   // Row expansion state
   const [open, setOpen] = useState({}); // rowId -> boolean
@@ -53,11 +56,12 @@ export default function HistoryTab() {
     m = selectedModel,
     u = selectedUsecase,
     f = selectedFamily,
-    s = selectedSuccess
+    s = selectedSuccess,
+    d = selectedDefence
   ) => {
     setLoading(true);
     try {
-      const base = { model: m || 'All', usecase: u || 'All', family: f || 'All' };
+      const base = { model: m || 'All', usecase: u || 'All', family: f || 'All', defence: d || 'False' };
 
       const qsFiltered = new URLSearchParams({ ...base, success: s || 'All' });
       const qsAll = new URLSearchParams({ ...base, success: 'All' });
@@ -79,6 +83,8 @@ export default function HistoryTab() {
         models: dataFiltered.filters?.models || ['All'],
         usecases: dataFiltered.filters?.usecases || ['All'],
         families: dataFiltered.filters?.families || ['All'],
+        successes: dataFiltered.filters?.successes || ['All', 'True', 'False'],
+        defences: dataFiltered.filters?.defences || ['False', 'True'],
       });
 
       setSummary(dataFiltered.summary || null);
@@ -92,17 +98,17 @@ export default function HistoryTab() {
     }
   };
 
-  // Initial load defaults to All/All/All/All
+  // Initial load defaults to All/All/All, Success=All, Defence=False
   useEffect(() => {
-    fetchHistory('All', 'All', 'All', 'All');
+    fetchHistory('All', 'All', 'All', 'All', 'False');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Re-fetch whenever a filter changes
   useEffect(() => {
-    fetchHistory(selectedModel, selectedUsecase, selectedFamily, selectedSuccess);
+    fetchHistory(selectedModel, selectedUsecase, selectedFamily, selectedSuccess, selectedDefence);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModel, selectedUsecase, selectedFamily, selectedSuccess]);
+  }, [selectedModel, selectedUsecase, selectedFamily, selectedSuccess, selectedDefence]);
 
   // Summary cards
   const Summary = useMemo(() => {
@@ -129,13 +135,14 @@ export default function HistoryTab() {
     );
   }, [summary]);
 
-  // Reset to default “All” on Refresh
+  // Reset to default on Refresh
   const onRefresh = () => {
     setSelectedModel('All');
     setSelectedUsecase('All');
     setSelectedFamily('All');
     setSelectedSuccess('All');
-    fetchHistory('All', 'All', 'All', 'All');
+    setSelectedDefence('False'); // default
+    fetchHistory('All', 'All', 'All', 'All', 'False');
   };
 
   return (
@@ -188,8 +195,21 @@ export default function HistoryTab() {
             value={selectedSuccess}
             onChange={(e) => setSelectedSuccess(e.target.value)}
           >
-            {['All', 'True', 'False'].map((s) => (
+            {filters.successes?.map((s) => (
               <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-600 mb-1">Defence</label>
+          <select
+            className="border rounded px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+            value={selectedDefence}
+            onChange={(e) => setSelectedDefence(e.target.value)}
+          >
+            {filters.defences?.map((d) => (
+              <option key={d} value={d}>{d}</option>
             ))}
           </select>
         </div>
@@ -198,7 +218,7 @@ export default function HistoryTab() {
           onClick={onRefresh}
           className="h-[38px] px-4 rounded border border-brand-blue bg-white text-brand-blue hover:bg-gray-50"
           disabled={loading}
-          title="Refresh (resets filters to All)"
+          title="Refresh (resets filters to All/False)"
         >
           {loading ? 'Loading…' : 'Refresh'}
         </button>
@@ -210,16 +230,17 @@ export default function HistoryTab() {
       {/* Visualization area */}
       <div className="rounded-lg border border-gray-200 bg-white p-3">
         <div className="text-sm font-medium text-brand-blue mb-2">
-          Visualizations (auto-updates with filters)
+          Visualizations
         </div>
         <Visualizations
-          rows={rows}          // respects Success filter
-          rowsAll={rowsAll}    // ignores Success filter (for bar denominators)
+          rows={rows}          // respects Success + Defence
+          rowsAll={rowsAll}    // ignores Success but respects Defence
           selected={{
             model: selectedModel,
             usecase: selectedUsecase,
             family: selectedFamily,
             success: selectedSuccess,
+            defence: selectedDefence,
           }}
         />
       </div>
@@ -237,6 +258,7 @@ export default function HistoryTab() {
               <th className="text-left px-3 py-2">Usecase</th>
               <th className="text-left px-3 py-2">Attack Family</th>
               <th className="text-left px-3 py-2">Attack Name</th>
+              <th className="text-left px-3 py-2">Defence</th>
               <th className="text-left px-3 py-2">Success</th>
               <th className="text-left px-3 py-2">Latency</th>
               <th className="text-left px-3 py-2">Prompt</th>
@@ -255,6 +277,7 @@ export default function HistoryTab() {
                     <td className="px-3 py-2">{r.usecase}</td>
                     <td className="px-3 py-2">{r.attack_family}</td>
                     <td className="px-3 py-2">{r.attack_name ?? '—'}</td>
+                    <td className="px-3 py-2">{r.defence ? 'True' : 'False'}</td>
                     <td className="px-3 py-2">{statusBadge(r.success)}</td>
                     <td className="px-3 py-2">{fmtLatency(r.latency)}</td>
                     <td className="px-3 py-2 text-gray-700">
@@ -279,7 +302,7 @@ export default function HistoryTab() {
                   {/* Expandable details */}
                   {isOpen && (
                     <tr className="bg-gray-50">
-                      <td className="px-3 py-3" colSpan={10}>
+                      <td className="px-3 py-3" colSpan={11}>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                           <div className="rounded border border-gray-200 bg-white p-3">
                             <div className="text-xs font-semibold text-brand-blue mb-1">Full Prompt</div>
@@ -303,14 +326,14 @@ export default function HistoryTab() {
 
             {rows.length === 0 && !loading && (
               <tr>
-                <td className="px-3 py-6 text-center text-gray-500" colSpan={10}>
+                <td className="px-3 py-6 text-center text-gray-500" colSpan={11}>
                   No events found for the chosen filters.
                 </td>
               </tr>
             )}
             {loading && (
               <tr>
-                <td className="px-3 py-6 text-center text-gray-500" colSpan={10}>
+                <td className="px-3 py-6 text-center text-gray-500" colSpan={11}>
                   Loading…
                 </td>
               </tr>

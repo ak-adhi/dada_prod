@@ -3,6 +3,7 @@
  * Supports fields:
  *  - attack_name, attack_family, attack_prompt, model_response
  *  - attack_success (boolean), latency_ms (or latency), model_name, usecase
+ *  - defence_active (boolean)
  */
 const fs = require('fs');
 const path = require('path');
@@ -29,14 +30,15 @@ async function main() {
   // Upsert on (attack_prompt, model_name, usecase)
   const sql = `
     INSERT INTO dada.eval_results
-      (attack_family, attack_prompt, model_response, attack_success, latency, model_name, usecase, attack_name)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      (attack_family, attack_prompt, model_response, attack_success, latency, model_name, usecase, attack_name, defence_active)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
     ON CONFLICT (attack_prompt, model_name, usecase) DO UPDATE
       SET model_response = EXCLUDED.model_response,
           attack_success = EXCLUDED.attack_success,
           latency       = EXCLUDED.latency,
           attack_family = EXCLUDED.attack_family,
           attack_name   = EXCLUDED.attack_name,
+          defence_active= EXCLUDED.defence_active,
           created_at    = NOW()
   `;
 
@@ -56,6 +58,7 @@ async function main() {
       r.model_name ?? 'unknown',
       r.usecase ?? 'unknown',
       r.attack_name ?? 'unknown',
+      !!r.defence_active, // <-- new
     ];
 
     try {

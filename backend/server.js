@@ -21,12 +21,17 @@ const usecases = [
   { id: 3, name: 'Prompt Injection Test' },
 ];
 
+
 app.get('/api/models', (_req, res) => {
   res.json({ success: true, data: models });
 });
+
+
 app.get('/api/usecases', (_req, res) => {
   res.json({ success: true, data: usecases });
 });
+
+
 app.post('/api/attacks/run', (req, res) => {
   const { modelId, usecaseId } = req.body || {};
   res.json({
@@ -34,9 +39,13 @@ app.post('/api/attacks/run', (req, res) => {
     message: `Attack simulated for model ${modelId}, usecase ${usecaseId}`,
   });
 });
+
+
 app.post('/api/defence/activate', (_req, res) => {
   res.json({ success: true, message: 'Defence activated (mock)' });
 });
+
+
 app.get('/api/taxonomy', (_req, res) => {
   res.json({
     success: true,
@@ -47,28 +56,31 @@ app.get('/api/taxonomy', (_req, res) => {
   });
 });
 
+
 // History endpoint backed by Postgres ----
+// ---- Real: History endpoint backed by Postgres ----
 app.get('/api/history', async (req, res) => {
   try {
     const model = (req.query.model || 'All').trim();
     const usecase = (req.query.usecase || 'All').trim();
     const family = (req.query.family || 'All').trim();
-    const successStr = (req.query.success || 'All').trim(); // 'All' | 'True' | 'False'
+    const successStr = (req.query.success || 'All').trim(); 
+    const defenceStr = (req.query.defence || 'False').trim(); 
 
-    // Filters for dropdowns
+    // Filters for dropdowns (simple, static lists)
     const modelsQ = await query(`SELECT DISTINCT model_name AS m FROM dada.eval_results ORDER BY 1`);
     const usecasesQ = await query(`SELECT DISTINCT usecase AS u FROM dada.eval_results ORDER BY 1`);
     const familiesQ = await query(`SELECT DISTINCT attack_family AS f FROM dada.eval_results ORDER BY 1`);
-    const successesQ = await query(`SELECT DISTINCT attack_success AS s FROM dada.eval_results ORDER BY 1`);
 
     const filters = {
       models: ['All', ...modelsQ.rows.map(r => r.m)],
       usecases: ['All', ...usecasesQ.rows.map(r => r.u)],
       families: ['All', ...familiesQ.rows.map(r => r.f)],
-      successes: ['All', ...successesQ.rows.map(r => (r.s ? 'True' : 'False'))]
+      successes: ['All', 'True', 'False'],
+      defences: ['False', 'True'], // no "All"
     };
 
-    // Build WHERE dynamically
+    // WHERE clause (model/usecase/family/success/defence)
     const whereParts = [];
     const params = [];
     if (model !== 'All') {
@@ -87,9 +99,13 @@ app.get('/api/history', async (req, res) => {
       params.push(successStr === 'True'); // boolean
       whereParts.push(`attack_success = $${params.length}`);
     }
+    // Always apply defence filter (no "All")
+    params.push(defenceStr === 'True');
+    whereParts.push(`defence_active = $${params.length}`);
+
     const where = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
 
-    // Summary over the filtered set
+    // Summary (filtered)
     const summarySql = `
       SELECT
         COUNT(*)::int AS total,
@@ -111,7 +127,8 @@ app.get('/api/history', async (req, res) => {
 
     // Rows (latest first, cap 2000)
     const rowsSql = `
-      SELECT id, model_name, usecase, attack_family, attack_name, attack_success, latency, attack_prompt, model_response
+      SELECT id, model_name, usecase, attack_family, attack_name,
+             attack_success, latency, attack_prompt, model_response, defence_active
       FROM dada.eval_results
       ${where}
       ORDER BY id DESC
@@ -129,6 +146,7 @@ app.get('/api/history', async (req, res) => {
       latency: row.latency,
       prompt: row.attack_prompt,
       response: row.model_response,
+      defence: !!row.defence_active, // <--- return to UI
     }));
 
     return res.json({ success: true, filters, summary, data });
@@ -137,6 +155,7 @@ app.get('/api/history', async (req, res) => {
     return res.status(500).json({ success: false, error: e.message });
   }
 });
+
 
 
 app.listen(PORT, () => {
