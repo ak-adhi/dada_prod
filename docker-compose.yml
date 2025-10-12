@@ -13,16 +13,16 @@ services:
     ports:
       - "4000:4000"
 
-  # ---- disable Mistral for now ----
-  # mistral_7b:
-  #   build:
-  #     context: ./backend/llms/mistral_7b
-  #   platform: linux/arm64/v8
-  #   container_name: mistral_7b_llm
-  #   ports:
-  #     - "8080:8080"
-  #   volumes:
-  #     - ./backend/llms/mistral_7b/model:/model
+ 
+  mistral_7b:
+    build:
+      context: ./backend/llms/mistral_7b
+    platform: linux/arm64/v8
+    container_name: mistral_7b_llm
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend/llms/mistral_7b/model:/model
 
   postgres_db:
     image: postgres:15-alpine
