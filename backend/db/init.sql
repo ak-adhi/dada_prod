@@ -322,3 +322,9 @@ ALTER TABLE IF EXISTS dada.eval_results
 CREATE INDEX IF NOT EXISTS idx_eval_results_family_success
   ON dada.eval_results (attack_family, attack_success);
 
+-- === schema updates for defence flag ===
+ALTER TABLE IF EXISTS dada.eval_results
+  ADD COLUMN IF NOT EXISTS defence_active BOOLEAN DEFAULT FALSE;
+
+CREATE INDEX IF NOT EXISTS idx_eval_results_defence
+  ON dada.eval_results (defence_active);
