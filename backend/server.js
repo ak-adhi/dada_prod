@@ -131,7 +131,7 @@ app.get('/api/history', async (req, res) => {
              attack_success, latency, attack_prompt, model_response, defence_active
       FROM dada.eval_results
       ${where}
-      ORDER BY id DESC
+      ORDER BY id ASC
       LIMIT 2000
     `;
     const r = await query(rowsSql, params);
