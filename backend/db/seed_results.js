@@ -2,8 +2,8 @@
  * Seeds dada.eval_results from ../data/final_results.json
  * Supports fields:
  *  - attack_name, attack_family, attack_prompt, model_response
- *  - attack_success (boolean), latency_ms (or latency), model_name, usecase
- *  - defence_active (boolean)
+ *  - attack_success (boolean), latency (or latency_ms), model_name, usecase
+ *  - defended (boolean) [new] OR defence_active (boolean) [old]
  */
 const fs = require('fs');
 const path = require('path');
@@ -44,10 +44,17 @@ async function main() {
 
   let inserted = 0;
   for (const r of rows) {
+    // Prefer new 'latency' if present; fall back to old 'latency_ms'
     const latency =
-      typeof r.latency_ms === 'number' ? r.latency_ms
-      : typeof r.latency === 'number' ? r.latency
+      typeof r.latency === 'number' ? r.latency
+      : typeof r.latency_ms === 'number' ? r.latency_ms
       : null;
+
+    // Prefer new 'defended' if present; fall back to old 'defence_active'
+    const defenceActive =
+      typeof r.defended === 'boolean' ? r.defended
+      : typeof r.defence_active === 'boolean' ? r.defence_active
+      : false;
 
     const values = [
       r.attack_family ?? '',
@@ -58,7 +65,7 @@ async function main() {
       r.model_name ?? 'unknown',
       r.usecase ?? 'unknown',
       r.attack_name ?? 'unknown',
-      !!r.defence_active, // <-- new
+      defenceActive,
     ];
 
     try {
@@ -66,6 +73,7 @@ async function main() {
       inserted++;
       if (inserted % 100 === 0) console.log(`  ...${inserted}`);
     } catch (e) {
+      // keep inserting remaining rows
       console.warn('Row insert failed (skipped):', e.message);
     }
   }
