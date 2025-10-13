@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import LiveMetrics from "../components/LiveMetrics";
 
 export default function MainTab() {
   const [models, setModels] = useState([]);
@@ -73,6 +74,7 @@ useEffect(() => {
           Activate Defence
         </button>
       </div>
+      <LiveMetrics visible />
     </section>
   );
 }
