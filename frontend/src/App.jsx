@@ -84,7 +84,7 @@ export default function App() {
             { id: 'chat', label: 'Chat' },
             { id: 'dashboard', label: 'Results Dashboard' },
             { id: 'taxonomy', label: 'Taxonomy' },
-            { id: 'About', label: 'About DADA' },
+            { id: 'About', label: 'About' },
           ].map((tab) => (
             <li key={tab.id}>
               <button

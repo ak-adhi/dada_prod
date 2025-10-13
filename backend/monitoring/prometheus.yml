@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 5s # Scrape frequently for near real-time updates
+
+scrape_configs:
+  # 1. Scrape the FastAPI API Gateway (dada_api service)
+  - job_name: 'dada-api'
+    # Use the service name defined in docker-compose.yml and the internal container port (8000)
+    static_configs:
+      - targets: ['api:8000']
+        labels:
+          application: 'fastapi'
+          component: 'api-gateway'
+
+  # 2. Scrape the Prometheus server itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

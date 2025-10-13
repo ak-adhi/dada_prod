@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+pydantic
+redis
+celery
+prometheus_client
+httpx # For making asynchronous LLM/DB requests from Celery
+psycopg2-binary
