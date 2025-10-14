@@ -1,64 +1,97 @@
 import React, { useState, useEffect, useRef } from "react";
 import * as d3 from "d3";
-import attacksData from "../data/attacks.json";
-import modelsData from "../data/models.json";
 
 export default function TaxonomyTab() {
   const [viewMode, setViewMode] = useState("tree");
   const svgRef = useRef(null);
   const [treeData, setTreeData] = useState(null);
   const [processedData, setProcessedData] = useState(null);
+  const [modelsData, setModelsData] = useState({ models: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Group attacks by family
-    const familiesMap = new Map();
+    const fetchTaxonomyData = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        // 1. 從 API 獲取 taxonomy tree 數據
+        const taxonomyResponse = await fetch('/api/v1/list/tax_tree');
+        
+        if (!taxonomyResponse.ok) {
+          throw new Error(`Failed to fetch taxonomy data: ${taxonomyResponse.status}`);
+        }
+        
+        const attacksData = await taxonomyResponse.json();
+        
+        // 2. 從 API 獲取 models 數據（可選）
+        try {
+          const modelsResponse = await fetch('/api/v1/list/llms');
+          if (modelsResponse.ok) {
+            const models = await modelsResponse.json();
+            setModelsData({ models: models || [] });
+          }
+        } catch (err) {
+          console.warn('Failed to fetch models data:', err);
+          // models 不是必需的，所以只是警告，不中斷主流程
+        }
 
-    attacksData.forEach((attack) => {
-      const familyName = attack.attack_family;
-      if (!familiesMap.has(familyName)) {
-        familiesMap.set(familyName, {
-          name: familyName,
-          attacks: [],
+        // 3. 處理 taxonomy 數據
+        const familiesMap = new Map();
+
+        attacksData.forEach((attack) => {
+          const familyName = attack.attack_family;
+          if (!familiesMap.has(familyName)) {
+            familiesMap.set(familyName, {
+              name: familyName,
+              attacks: [],
+            });
+          }
+
+          familiesMap.get(familyName).attacks.push({
+            id: attack.id,
+            title: attack.attack_name,
+            description: attack.attack_prompt,
+            usecase: attack.usecase,
+            severity: "high",
+          });
         });
+
+        const families = Array.from(familiesMap.values());
+        setProcessedData({ families });
+
+        const transformedData = {
+          name: "LLM Attacks",
+          children: families.map((family) => ({
+            name: family.name.replace(/_/g, " "),
+            children: family.attacks.slice(0, 8).map((attack) => ({
+              name: attack.title,
+              description: attack.description,
+              usecase: attack.usecase,
+            })),
+          })),
+        };
+
+        setTreeData(transformedData);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching taxonomy data:', error);
+        setError(error.message);
+        setLoading(false);
       }
-
-      familiesMap.get(familyName).attacks.push({
-        id: attack.id,
-        title: attack.attack_name,
-        description: attack.attack_prompt,
-        usecase: attack.usecase,
-        severity: "high", 
-      });
-    });
-
-    const families = Array.from(familiesMap.values());
-    setProcessedData({ families });
-
-   
-    const transformedData = {
-      name: "LLM Attacks",
-      children: families.map((family) => ({
-        name: family.name.replace(/_/g, " "),
-        children: family.attacks.slice(0, 8).map((attack) => ({
-          name: attack.title,
-          description: attack.description,
-          usecase: attack.usecase,
-          
-        })),
-      })),
     };
 
-    setTreeData(transformedData);
+    fetchTaxonomyData();
   }, []);
 
   useEffect(() => {
     if (!treeData || viewMode !== "tree") return;
 
     try {
-      
       d3.select(svgRef.current).selectAll("*").remove();
 
-      const width = 1600; 
+      const width = 1600;
       const height = 800;
 
       const svg = d3
@@ -84,11 +117,10 @@ export default function TaxonomyTab() {
       const tree = d3.tree()
         .size([width - 200, height - 200])
         .separation((a, b) => {
-          
           if (a.parent === b.parent) {
-            return 2; 
+            return 2;
           } else {
-            return 3; 
+            return 3;
           }
         });
 
@@ -118,9 +150,8 @@ export default function TaxonomyTab() {
         const nodes = treeLayout.descendants();
         const links = treeLayout.descendants().slice(1);
 
-        
         nodes.forEach((d) => {
-          d.y = d.depth * 220; 
+          d.y = d.depth * 220;
         });
 
         // Update nodes
@@ -150,7 +181,7 @@ export default function TaxonomyTab() {
           .style("stroke", "#4A90E2")
           .style("stroke-width", "2")
           .style("cursor", "move")
-          .style("transition", "all 0.3s ease"); 
+          .style("transition", "all 0.3s ease");
 
         nodeEnter
           .append("text")
@@ -201,7 +232,6 @@ export default function TaxonomyTab() {
           .duration(750)
           .attr("transform", (d) => `translate(${d.x},${d.y})`);
 
-        
         nodeUpdate
           .select("rect")
           .on("mouseenter", function () {
@@ -209,11 +239,11 @@ export default function TaxonomyTab() {
             rect
               .transition()
               .duration(200)
-              .style("fill", "#D6EAFF") 
+              .style("fill", "#D6EAFF")
               .style("stroke-width", "3")
-              .style("stroke", "#1976D2") 
-              .attr("y", -42) 
-              .style("filter", "drop-shadow(0 6px 12px rgba(25, 118, 210, 0.4))"); 
+              .style("stroke", "#1976D2")
+              .attr("y", -42)
+              .style("filter", "drop-shadow(0 6px 12px rgba(25, 118, 210, 0.4))");
           })
           .on("mouseleave", function () {
             const rect = d3.select(this);
@@ -223,7 +253,7 @@ export default function TaxonomyTab() {
               .style("fill", "white")
               .style("stroke-width", "2")
               .style("stroke", "#4A90E2")
-              .attr("y", -40) 
+              .attr("y", -40)
               .style("filter", "none");
           });
 
@@ -275,7 +305,7 @@ export default function TaxonomyTab() {
 
       function click(event, d) {
         if (event.defaultPrevented) return;
-        
+
         if (d.children) {
           d._children = d.children;
           d.children = null;
@@ -294,32 +324,32 @@ export default function TaxonomyTab() {
       function dragged(event, d) {
         const dx = event.x - d.x;
         const dy = event.y - d.y;
-        
+
         d.x = event.x;
         d.y = event.y;
-        
+
         d3.select(this).attr("transform", `translate(${d.x},${d.y})`);
-        
+
         if (d.descendants) {
           d.descendants().forEach(descendant => {
             if (descendant !== d) {
               descendant.x += dx;
               descendant.y += dy;
-              
+
               g.selectAll(".node")
                 .filter(node => node === descendant)
                 .attr("transform", `translate(${descendant.x},${descendant.y})`);
             }
           });
         }
-        
+
         g.selectAll(".link").attr("d", link => diagonal(link, link.parent));
       }
 
       function dragended(event, d) {
         d.x0 = d.x;
         d.y0 = d.y;
-        
+
         if (d.descendants) {
           d.descendants().forEach(descendant => {
             descendant.x0 = descendant.x;
@@ -353,8 +383,51 @@ export default function TaxonomyTab() {
     }
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <div style={{ 
+        padding: "20px", 
+        textAlign: "center",
+        fontSize: "18px",
+        color: "#666"
+      }}>
+        Loading taxonomy data...
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div style={{ 
+        padding: "20px", 
+        textAlign: "center",
+        fontSize: "16px",
+        color: "#d32f2f",
+        backgroundColor: "#ffebee",
+        borderRadius: "8px",
+        margin: "20px"
+      }}>
+        <strong>Error loading taxonomy data:</strong> {error}
+        <br />
+        <small>Please check if the backend is running on port 8001</small>
+      </div>
+    );
+  }
+
+  // No data state
   if (!treeData || !processedData) {
-    return <div style={{ padding: "20px" }}>Loading...</div>;
+    return (
+      <div style={{ 
+        padding: "20px", 
+        textAlign: "center",
+        fontSize: "16px",
+        color: "#666"
+      }}>
+        No taxonomy data available.
+      </div>
+    );
   }
 
   return (
@@ -365,9 +438,10 @@ export default function TaxonomyTab() {
           onClick={() => setViewMode("tree")}
           style={{
             padding: "12px 24px",
-            backgroundColor: "white",
-            color: "#333",
-            border: "2px solid #ddd",
+            backgroundColor: viewMode === "tree" ? "#D6EAFF" : "white",
+            color: viewMode === "tree" ? "#1976D2" : "#333",
+            border: "2px solid",
+            borderColor: viewMode === "tree" ? "#1976D2" : "#ddd",
             borderRadius: "8px",
             cursor: "pointer",
             fontSize: "14px",
@@ -383,21 +457,24 @@ export default function TaxonomyTab() {
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.transform = "translateY(0)";
-            e.currentTarget.style.backgroundColor = "white";
-            e.currentTarget.style.borderColor = "#ddd";
-            e.currentTarget.style.color = "#333";
+            if (viewMode !== "tree") {
+              e.currentTarget.style.backgroundColor = "white";
+              e.currentTarget.style.borderColor = "#ddd";
+              e.currentTarget.style.color = "#333";
+            }
             e.currentTarget.style.boxShadow = "none";
           }}
         >
-         Tree View
+          Tree View
         </button>
         <button
           onClick={() => setViewMode("list")}
           style={{
             padding: "12px 24px",
-            backgroundColor: "white",
-            color: "#333",
-            border: "2px solid #ddd",
+            backgroundColor: viewMode === "list" ? "#D6EAFF" : "white",
+            color: viewMode === "list" ? "#1976D2" : "#333",
+            border: "2px solid",
+            borderColor: viewMode === "list" ? "#1976D2" : "#ddd",
             borderRadius: "8px",
             cursor: "pointer",
             fontSize: "14px",
@@ -413,13 +490,15 @@ export default function TaxonomyTab() {
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.transform = "translateY(0)";
-            e.currentTarget.style.backgroundColor = "white";
-            e.currentTarget.style.borderColor = "#ddd";
-            e.currentTarget.style.color = "#333";
+            if (viewMode !== "list") {
+              e.currentTarget.style.backgroundColor = "white";
+              e.currentTarget.style.borderColor = "#ddd";
+              e.currentTarget.style.color = "#333";
+            }
             e.currentTarget.style.boxShadow = "none";
           }}
         >
-         List View
+          List View
         </button>
       </div>
 
@@ -542,43 +621,45 @@ export default function TaxonomyTab() {
                 ))}
               </div>
 
-              {/* Models Summary */}
-              <div
-                style={{
-                  marginTop: "15px",
-                  padding: "12px",
-                  backgroundColor: "#f0f7ff",
-                  borderRadius: "6px",
-                }}
-              >
-                <strong style={{ fontSize: "13px", color: "#4A90E2" }}>
-                  Models to be tested:
-                </strong>
+              {/* Models Summary - 只在有 models 數據時顯示 */}
+              {modelsData.models && modelsData.models.length > 0 && (
                 <div
                   style={{
-                    display: "flex",
-                    gap: "10px",
-                    marginTop: "8px",
-                    flexWrap: "wrap",
+                    marginTop: "15px",
+                    padding: "12px",
+                    backgroundColor: "#f0f7ff",
+                    borderRadius: "6px",
                   }}
                 >
-                  {modelsData.models.map((model) => (
-                    <span
-                      key={model.id}
-                      style={{
-                        padding: "6px 12px",
-                        backgroundColor: "white",
-                        border: "1px solid #4A90E2",
-                        borderRadius: "6px",
-                        fontSize: "12px",
-                        color: "#333",
-                      }}
-                    >
-                      {model.name} (Defense: {model.defense_score})
-                    </span>
-                  ))}
+                  <strong style={{ fontSize: "13px", color: "#4A90E2" }}>
+                    Models to be tested:
+                  </strong>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "10px",
+                      marginTop: "8px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {modelsData.models.map((model) => (
+                      <span
+                        key={model.llm_name || model.id}
+                        style={{
+                          padding: "6px 12px",
+                          backgroundColor: "white",
+                          border: "1px solid #4A90E2",
+                          borderRadius: "6px",
+                          fontSize: "12px",
+                          color: "#333",
+                        }}
+                      >
+                        {model.llm_name || model.name}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           ))}
         </div>
