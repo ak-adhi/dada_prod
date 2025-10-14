@@ -119,9 +119,12 @@ class DBManager:
     
     def get_tax_tree(self) -> List[Dict[str, Any]]:
         """Fetches available use cases from the dada.usecase_config table."""
-        query = """SELECT DISTINCT
+        query = """SELECT 
+                    attack_id as id,
                     attack_family,
-                    attack_name
+                    attack_name,
+                    attack_prompt,
+                    usecase
                     FROM
                     dada.prompt_injection_attacks
                     ORDER BY
