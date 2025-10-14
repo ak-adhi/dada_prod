@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 # Import all required routers (ensure these files are created in api/routers/v1/)
-from api.routers.v1 import attack_routes, defence_routes, data_routes, llm_routes, eval_routes, history_routes
+# NOTE: Added 'task_routes' import for generic task status checking
+from api.routers.v1 import attack_routes, defence_routes, data_routes, llm_routes, eval_routes, history_routes, task_routes
 from api.dependencies import metrics_middleware, get_prometheus_metrics
 
 # Create the main FastAPI application instance
@@ -33,6 +34,8 @@ app.include_router(data_routes.router, prefix="/api/v1/list", tags=["List Data"]
 app.include_router(llm_routes.router, prefix="/api/v1/llm", tags=["LLM Proxy"])
 app.include_router(eval_routes.router, prefix="/api/v1/evaluate", tags=["Evaluation"])
 app.include_router(history_routes.router, prefix="/api/v1", tags=["History"]) # New Router added
+# NOTE: New router added for checking Celery task status
+app.include_router(task_routes.router, prefix="/api/v1/tasks", tags=["Tasks"])
 
 
 # --- Health Check Endpoint ---

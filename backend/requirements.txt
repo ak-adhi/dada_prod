@@ -4,5 +4,8 @@ pydantic
 redis
 celery
 prometheus_client
-httpx # For making asynchronous LLM/DB requests from Celery
+httpx
 psycopg2-binary
+faiss-cpu>=1.12.0,<2.0.0
+sentence-transformers>=5.1.0,<6.0.0
+numpy>=2.0.0,<3.0.0

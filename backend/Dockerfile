@@ -1,28 +1,25 @@
 # Use an official Python runtime as a parent image
 FROM python:3.11-slim
 
+# Install system dependencies required for compiling native packages (like faiss-cpu)
+# These tools are essential for dependencies with C/C++ extensions.
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    libopenblas-dev \
+    --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 # Set the working directory inside the container
-# All subsequent commands will be executed from this directory
 WORKDIR /app
 
-# Set environment variables for non-interactive commands and Python
+# Set environment variables
 ENV PYTHONUNBUFFERED 1
 
-# Copy the requirements file into the container
+# 1. Copy and install dependencies first
+# This ensures a faster build if only application code changes.
 COPY requirements.txt .
-
-# Install dependencies. Use no-cache-dir to keep the image small.
-# Use --break-system-packages for non-venv installations in modern Python environments
 RUN pip install --no-cache-dir -r requirements.txt
 
-# We don't copy the whole code base here because the 'volumes' mount
-# in docker-compose.yml will inject the code at runtime.
 
 # The ENTRYPOINT or CMD is defined in docker-compose.yml
-
-# The container exposes port 8000, which is where Uvicorn will run the FastAPI app.
-# Note: This is documentation; the actual port mapping is done in docker-compose.yml.
-EXPOSE 8000
-
-# NOTE: No CMD is needed here. The startup command is defined explicitly 
-# in the 'command' field for both the 'api' and 'worker' services in docker-compose.yml.
