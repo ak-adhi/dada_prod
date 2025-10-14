@@ -7,6 +7,7 @@
 -- UPDATE dada.prompt_injection_attacks
 -- SET attack_family = REPLACE(attack_family, '_', ' ');
 
+
 --TESTING BLOCK ENDS [codoc]
 
 -- Create schema if it does not exist
