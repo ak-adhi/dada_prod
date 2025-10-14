@@ -63,6 +63,32 @@ services:
       - "8080:8080"
     volumes:
       - ./backend/llms/mistral_7b/model:/model #change here when model file changes
+    # # >>> CRITICAL ADDITION FOR GPU ACCESS <<<
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all # Use 'all' to access all GPUs, equivalent to --gpus all
+    #           capabilities: [gpu]
+
+  slm:
+    build:
+      context: ./backend/llms/phi3_mini
+    platform: linux/arm64/v8
+    container_name: phi3_mini_slm  
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./backend/llms/phi3_mini/model:/model 
+    # # >>> CRITICAL ADDITION FOR GPU ACCESS <<<
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all # Use 'all' to access all GPUs, equivalent to --gpus all
+    #           capabilities: [gpu]
 
   postgres_db:
     image: postgres:15-alpine

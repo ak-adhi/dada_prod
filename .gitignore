@@ -86,3 +86,4 @@ appendonly.aof
 
 # Large LLM files
 /backend/llms/mistral_7b/model
+/backend/llms/phi3_mini/model
