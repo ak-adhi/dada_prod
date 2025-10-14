@@ -19,3 +19,8 @@ def list_usecases():
 def list_attackfamilies():
     """Lists all defined usecases from the database."""
     return db_manager.get_attack_families()
+
+@router.get("/tax_tree", response_model=List[Dict[str, Any]])
+def list_tax_tree():
+    """Lists all defined usecases from the database."""
+    return db_manager.get_tax_tree()

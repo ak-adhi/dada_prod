@@ -116,6 +116,18 @@ class DBManager:
         """Fetches available use cases from the dada.usecase_config table."""
         query = "select distinct attack_family from dada.prompt_injection_attacks ORDER BY attack_family;"
         return self._execute_query(query)
+    
+    def get_tax_tree(self) -> List[Dict[str, Any]]:
+        """Fetches available use cases from the dada.usecase_config table."""
+        query = """SELECT DISTINCT
+                    attack_family,
+                    attack_name
+                    FROM
+                    dada.prompt_injection_attacks
+                    ORDER BY
+                    attack_family,
+                    attack_name;"""
+        return self._execute_query(query)
 
     def get_attack_prompts(self, usecase: str, attack_family: Optional[str] = None, attack_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Fetches attack prompts based on filters from dada.prompt_injection_attacks."""
