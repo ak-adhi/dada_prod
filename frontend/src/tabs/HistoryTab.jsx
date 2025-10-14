@@ -1,16 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Visualizations from '../components/Visualizations';
 
+// Constants for success/defence filter options
+const SUCCESS_OPTIONS = ['All', 'True', 'False'];
+const DEFENCE_OPTIONS = ['False', 'True'];
+
 export default function HistoryTab() {
   const [loading, setLoading] = useState(false);
+  const [loadingFilters, setLoadingFilters] = useState(true);
 
-  // Filter lists provided by the API
+  // Filter lists loaded from dedicated list endpoints
   const [filters, setFilters] = useState({
     models: ['All'],
     usecases: ['All'],
     families: ['All'],
-    successes: ['All', 'True', 'False'],
-    defences: ['False', 'True'], // no "All"
+    successes: SUCCESS_OPTIONS,
+    defences: DEFENCE_OPTIONS,
   });
 
   // Current selections (Defence defaults to False)
@@ -50,8 +55,71 @@ export default function HistoryTab() {
     if (Number.isNaN(num)) return '—';
     return `${num.toFixed(2)} ms`;
   };
+  
+  /**
+   * Helper function to extract string values from potentially complex API responses.
+   * Handles array of strings OR array of objects (e.g., [{"llm_name": "model_a"}]).
+   */
+  const extractNames = (data, keyName) => {
+    if (Array.isArray(data)) {
+      // If it's an array of objects, map to the value of the expected key
+      if (data.length > 0 && typeof data[0] === 'object' && data[0] !== null && keyName in data[0]) {
+        return data.map(item => item[keyName]).filter(name => typeof name === 'string');
+      }
+      // Otherwise, assume it's already an array of strings
+      return data;
+    }
+    return [];
+  };
 
-  // Fetch history (two calls: one with Success filter, one with success=All)
+  /**
+   * Fetches the static filter lists (Models, Usecases, Families) once on load.
+   */
+  const fetchFilters = async () => {
+    // console.log('--- fetchFilters: Starting filter list fetch.'); // DEBUG
+    setLoadingFilters(true);
+    try {
+      // Define endpoints and the expected key name in the database results
+      const endpoints = {
+        models: { url: '/api/v1/list/llms', key: 'llm_name' },
+        usecases: { url: '/api/v1/list/usecases', key: 'usecase_name' },
+        families: { url: '/api/v1/list/attack_families', key: 'attack_family' },
+      };
+
+      const results = await Promise.all(
+        Object.values(endpoints).map(({ url }) => fetch(url))
+      );
+
+      const data = await Promise.all(
+        results.map(res => res.json())
+      );
+      
+      // console.log('--- fetchFilters: Raw API filter data received:', data); // DEBUG
+
+      // Process results using the helper function
+      const models = ['All', ...extractNames(data[0], endpoints.models.key)];
+      const usecases = ['All', ...extractNames(data[1], endpoints.usecases.key)];
+      const families = ['All', ...extractNames(data[2], endpoints.families.key)];
+      
+      // console.log('--- fetchFilters: Processed filters:', { models, usecases, families }); // DEBUG
+
+      setFilters(prev => ({
+        ...prev,
+        models: models,
+        usecases: usecases,
+        families: families,
+      }));
+    } catch (e) {
+      // console.error("Error fetching filter lists:", e);
+      // Keep default filter options on failure
+    } finally {
+      setLoadingFilters(false);
+    }
+  };
+
+  /**
+   * Fetches history data based on current selections.
+   */
   const fetchHistory = async (
     m = selectedModel,
     u = selectedUsecase,
@@ -59,58 +127,85 @@ export default function HistoryTab() {
     s = selectedSuccess,
     d = selectedDefence
   ) => {
+    // Only proceed if filters are loaded, or if this is the initial run
+    if (loadingFilters) return;
+
     setLoading(true);
     try {
-      const base = { model: m || 'All', usecase: u || 'All', family: f || 'All', defence: d || 'False' };
+      // Base query params for all requests
+      const base = { model: m, usecase: u, family: f, defence: d };
 
-      const qsFiltered = new URLSearchParams({ ...base, success: s || 'All' });
-      const qsAll = new URLSearchParams({ ...base, success: 'All' });
+      // 1. Fetch filtered data (respects selectedSuccess)
+      const qsFiltered = new URLSearchParams({ ...base, success: s });
+      
+      // 2. Fetch all data (explicitly ignores success filter to get baseline for visualizations)
+      const qsAll = new URLSearchParams({ ...base, success: 'All' }); 
+
+      // console.log('--- fetchHistory: Fetching filtered with:', qsFiltered.toString()); // DEBUG
+      // console.log('--- fetchHistory: Fetching all with:', qsAll.toString()); // DEBUG
 
       const [resFiltered, resAll] = await Promise.all([
-        fetch(`/api/history?${qsFiltered.toString()}`),
-        fetch(`/api/history?${qsAll.toString()}`),
+        fetch(`/api/v1/history?${qsFiltered.toString()}`),
+        fetch(`/api/v1/history?${qsAll.toString()}`),
       ]);
+      
+      // Check for non-200 response codes before trying to parse JSON
+      if (!resFiltered.ok) throw new Error(`History API failed: ${resFiltered.statusText}`);
+      if (!resAll.ok) throw new Error(`History All API failed: ${resAll.statusText}`);
+
 
       const [dataFiltered, dataAll] = await Promise.all([
         resFiltered.json(),
         resAll.json(),
       ]);
 
+      // console.log('--- fetchHistory: Filtered Data Response:', dataFiltered); // DEBUG
+      // console.log('--- fetchHistory: All Data Response:', dataAll); // DEBUG
+
       if (!dataFiltered.success) throw new Error(dataFiltered.error || 'Failed to load history');
       if (!dataAll.success) throw new Error(dataAll.error || 'Failed to load history (all)');
-
-      setFilters({
-        models: dataFiltered.filters?.models || ['All'],
-        usecases: dataFiltered.filters?.usecases || ['All'],
-        families: dataFiltered.filters?.families || ['All'],
-        successes: dataFiltered.filters?.successes || ['All', 'True', 'False'],
-        defences: dataFiltered.filters?.defences || ['False', 'True'],
-      });
 
       setSummary(dataFiltered.summary || null);
       setRows(dataFiltered.data || []);
       setRowsAll(dataAll.data || []);
       setOpen({}); // collapse all on refresh or filter change
+      
+      // console.log('--- fetchHistory: Data set successfully. Rows filtered:', (dataFiltered.data || []).length); // DEBUG
+
     } catch (e) {
-      console.error(e);
+      // console.error("Error fetching history data:", e);
+      setSummary(null);
+      setRows([]);
+      setRowsAll([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Initial load defaults to All/All/All, Success=All, Defence=False
+  // 1. Initial filter list fetch (runs once)
   useEffect(() => {
-    fetchHistory('All', 'All', 'All', 'All', 'False');
+    fetchFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-fetch whenever a filter changes
+  // 2. Initial history load (runs once after filters are loaded)
   useEffect(() => {
-    fetchHistory(selectedModel, selectedUsecase, selectedFamily, selectedSuccess, selectedDefence);
+    if (!loadingFilters) {
+      fetchHistory(selectedModel, selectedUsecase, selectedFamily, selectedSuccess, selectedDefence);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingFilters]);
+
+  // 3. Re-fetch history whenever a selection filter changes
+  useEffect(() => {
+    // Prevent fetching until filters are fully loaded and the initial run is complete
+    if (!loadingFilters) {
+      fetchHistory(selectedModel, selectedUsecase, selectedFamily, selectedSuccess, selectedDefence);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedModel, selectedUsecase, selectedFamily, selectedSuccess, selectedDefence]);
 
-  // Summary cards
+  // Summary cards (Memoized for performance)
   const Summary = useMemo(() => {
     if (!summary) return null;
     const cards = [
@@ -120,6 +215,7 @@ export default function HistoryTab() {
       { label: 'Success Rate', value: `${summary.success_rate}%` },
       { label: 'Avg Latency', value: `${Number(summary.avg_latency || 0).toFixed(2)} ms` },
     ];
+    // console.log('--- Summary Memo: Summary data calculated:', cards); // DEBUG
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-2">
         {cards.map((c) => (
@@ -137,14 +233,19 @@ export default function HistoryTab() {
 
   // Reset to default on Refresh
   const onRefresh = () => {
+    // Reset selections to defaults
     setSelectedModel('All');
     setSelectedUsecase('All');
     setSelectedFamily('All');
     setSelectedSuccess('All');
     setSelectedDefence('False'); // default
+    
+    // Explicitly re-run fetch to bypass effect debounce if needed (though effects should handle it)
     fetchHistory('All', 'All', 'All', 'All', 'False');
   };
 
+  const currentLoadingState = loading || loadingFilters;
+  
   return (
     <div className="flex flex-col gap-4">
       {/* Filters */}
@@ -155,6 +256,7 @@ export default function HistoryTab() {
             className="border rounded px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
+            disabled={currentLoadingState}
           >
             {filters.models?.map((m) => (
               <option key={m} value={m}>{m}</option>
@@ -168,6 +270,7 @@ export default function HistoryTab() {
             className="border rounded px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
             value={selectedUsecase}
             onChange={(e) => setSelectedUsecase(e.target.value)}
+            disabled={currentLoadingState}
           >
             {filters.usecases?.map((u) => (
               <option key={u} value={u}>{u}</option>
@@ -181,6 +284,7 @@ export default function HistoryTab() {
             className="border rounded px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
             value={selectedFamily}
             onChange={(e) => setSelectedFamily(e.target.value)}
+            disabled={currentLoadingState}
           >
             {filters.families?.map((f) => (
               <option key={f} value={f}>{f}</option>
@@ -194,6 +298,7 @@ export default function HistoryTab() {
             className="border rounded px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
             value={selectedSuccess}
             onChange={(e) => setSelectedSuccess(e.target.value)}
+            disabled={currentLoadingState}
           >
             {filters.successes?.map((s) => (
               <option key={s} value={s}>{s}</option>
@@ -207,6 +312,7 @@ export default function HistoryTab() {
             className="border rounded px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
             value={selectedDefence}
             onChange={(e) => setSelectedDefence(e.target.value)}
+            disabled={currentLoadingState}
           >
             {filters.defences?.map((d) => (
               <option key={d} value={d}>{d}</option>
@@ -217,10 +323,10 @@ export default function HistoryTab() {
         <button
           onClick={onRefresh}
           className="h-[38px] px-4 rounded border border-brand-blue bg-white text-brand-blue hover:bg-gray-50"
-          disabled={loading}
+          disabled={currentLoadingState}
           title="Refresh (resets filters to All/False)"
         >
-          {loading ? 'Loading…' : 'Refresh'}
+          {currentLoadingState ? 'Loading…' : 'Refresh'}
         </button>
       </div>
 
@@ -324,14 +430,14 @@ export default function HistoryTab() {
               );
             })}
 
-            {rows.length === 0 && !loading && (
+            {rows.length === 0 && !currentLoadingState && (
               <tr>
                 <td className="px-3 py-6 text-center text-gray-500" colSpan={11}>
                   No events found for the chosen filters.
                 </td>
               </tr>
             )}
-            {loading && (
+            {currentLoadingState && (
               <tr>
                 <td className="px-3 py-6 text-center text-gray-500" colSpan={11}>
                   Loading…
