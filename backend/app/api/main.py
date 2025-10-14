@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 # Import all required routers (ensure these files are created in api/routers/v1/)
-from api.routers.v1 import attack_routes, defence_routes, data_routes, llm_routes, eval_routes
+from api.routers.v1 import attack_routes, defence_routes, data_routes, llm_routes, eval_routes, history_routes
 from api.dependencies import metrics_middleware, get_prometheus_metrics
 
 # Create the main FastAPI application instance
@@ -32,6 +32,8 @@ app.include_router(defence_routes.router, prefix="/api/v1/defence", tags=["Defen
 app.include_router(data_routes.router, prefix="/api/v1/list", tags=["List Data"])
 app.include_router(llm_routes.router, prefix="/api/v1/llm", tags=["LLM Proxy"])
 app.include_router(eval_routes.router, prefix="/api/v1/evaluate", tags=["Evaluation"])
+app.include_router(history_routes.router, prefix="/api/v1", tags=["History"]) # New Router added
+
 
 # --- Health Check Endpoint ---
 @app.get("/health", include_in_schema=False)

@@ -139,7 +139,7 @@ export default function App() {
         
 
       <footer className="text-center py-6 text-sm text-gray-500">
-        Prototype — frontend skeleton. Backend (FastAPI + Redis + Celery) is placeholder only.
+        Powered by the DADA Framework — Secure, Scalable, and Production-Ready.
       </footer>
     </div>
   );

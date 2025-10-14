@@ -140,7 +140,108 @@ class DBManager:
         query += " ORDER BY id;"
         
         return self._execute_query(query, tuple(params))
+    # --- NEW HISTORY FUNCTION FOR FRONTEND ---
 
+    def get_eval_history(self, model: str, usecase: str, family: str, success: str, defence: str) -> Dict[str, Any]:
+        """
+        Fetches evaluation history summary and detailed data from dada.eval_results 
+        based on the provided filters.
+        
+        Refactored to match the actual column names in the dada.eval_results table.
+        """
+        
+        # Helper to build the dynamic WHERE clause
+        conditions = []
+        params = []
+        
+        if model != 'All':
+            # Database column is model_name, not llm_name
+            conditions.append("model_name = %s") 
+            params.append(model)
+        
+        if usecase != 'All':
+            # Database column is usecase, not usecase_name
+            conditions.append("usecase = %s") 
+            params.append(usecase)
+
+        if family != 'All':
+            conditions.append("attack_family = %s")
+            params.append(family)
+        
+        # Success filter ('All', 'True', 'False')
+        if success != 'All':
+            # Database column is attack_success, not success
+            conditions.append("attack_success = %s")
+            # Convert 'True'/'False' string to Python boolean for PostgreSQL
+            params.append(success.lower() == 'true')
+
+        # Defence filter ('False', 'True')
+        if defence != 'All':
+            # Database column is defence_active, not defence_enabled
+            conditions.append("defence_active = %s") 
+            params.append(defence.lower() == 'true')
+
+        where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+        
+        # We need two sets of parameters for the two separate queries
+        params_tuple = tuple(params)
+        
+        # 1. Fetch Summary Statistics
+        summary_query = f"""
+            SELECT
+                COUNT(*)::integer AS total,
+                -- Uses correct column: attack_success
+                SUM(CASE WHEN attack_success = TRUE THEN 1 ELSE 0 END)::integer AS success_count,
+                SUM(CASE WHEN attack_success = FALSE THEN 1 ELSE 0 END)::integer AS failure_count,
+                COALESCE(AVG(latency), 0.0)::numeric(10, 2) AS avg_latency
+            FROM dada.eval_results
+            {where_clause};
+        """
+        
+        summary_results = self._execute_query(summary_query, params_tuple)
+        
+        summary_data = summary_results[0] if summary_results else {"total": 0, "success_count": 0, "failure_count": 0, "avg_latency": 0.0}
+
+        total = summary_data.get('total', 0)
+        success_count = summary_data.get('success_count', 0)
+        
+        # Calculate success rate and ensure types are float for JSON
+        success_rate = (success_count / total) * 100 if total > 0 else 0.0
+        summary_data['success_rate'] = float(f"{success_rate:.1f}")
+        summary_data['avg_latency'] = float(summary_data.get('avg_latency', 0.0))
+
+        # 2. Fetch Detailed Row Data (Limit to last 2000)
+        # Aliasing columns (AS) to match the frontend component's expectations (success, prompt, response)
+        data_query = f"""
+            SELECT 
+                id, 
+                model_name AS model,        -- Maps model_name to 'model'
+                usecase, 
+                attack_family, 
+                attack_name, 
+                defence_active AS defence,  -- Maps defence_active to 'defence'
+                attack_success AS success,  -- Maps attack_success to 'success'
+                latency, 
+                attack_prompt AS prompt,    -- Maps attack_prompt to 'prompt'
+                model_response AS response  -- Maps model_response to 'response'
+            FROM dada.eval_results
+            {where_clause}
+            ORDER BY id DESC
+            LIMIT 2000;
+        """
+        
+        row_data = self._execute_query(data_query, params_tuple)
+        
+        # Ensure ID is string for React keys
+        processed_row_data = [
+            {**row, "id": str(row["id"])}
+            for row in row_data
+        ]
+
+        return {
+            "summary": summary_data,
+            "data": processed_row_data
+        }
 # Global instances (These are initialized when main.py or tasks.py is loaded)
 db_manager = DBManager()
 llm_client = LLMClient(model_id="mistral_7b")
