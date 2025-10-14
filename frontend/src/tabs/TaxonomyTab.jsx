@@ -27,14 +27,14 @@ export default function TaxonomyTab() {
         title: attack.attack_name,
         description: attack.attack_prompt,
         usecase: attack.usecase,
-        severity: "high", // Default severity since not in new data
+        severity: "high", 
       });
     });
 
     const families = Array.from(familiesMap.values());
     setProcessedData({ families });
 
-    // Transform data for D3 tree
+   
     const transformedData = {
       name: "LLM Attacks",
       children: families.map((family) => ({
@@ -43,10 +43,7 @@ export default function TaxonomyTab() {
           name: attack.title,
           description: attack.description,
           usecase: attack.usecase,
-          children: modelsData.models.map((model) => ({
-            name: `${model.name}\n(Defense: ${model.defense_score})`,
-            description: model.description,
-          })),
+          
         })),
       })),
     };
@@ -58,11 +55,11 @@ export default function TaxonomyTab() {
     if (!treeData || viewMode !== "tree") return;
 
     try {
-      // Clear previous SVG content
+      
       d3.select(svgRef.current).selectAll("*").remove();
 
-      const width = 1400;
-      const height = 700;
+      const width = 1600; 
+      const height = 800;
 
       const svg = d3
         .select(svgRef.current)
@@ -81,12 +78,19 @@ export default function TaxonomyTab() {
       svg.call(zoom);
 
       // Set initial transform
-      const initialTransform = d3.zoomIdentity.translate(width / 2, 50).scale(0.8);
+      const initialTransform = d3.zoomIdentity.translate(width / 2, 50).scale(0.7);
       svg.call(zoom.transform, initialTransform);
 
       const tree = d3.tree()
         .size([width - 200, height - 200])
-        .separation((a, b) => (a.parent === b.parent ? 1 : 1.5));
+        .separation((a, b) => {
+          
+          if (a.parent === b.parent) {
+            return 2; 
+          } else {
+            return 3; 
+          }
+        });
 
       let i = 0;
 
@@ -114,9 +118,9 @@ export default function TaxonomyTab() {
         const nodes = treeLayout.descendants();
         const links = treeLayout.descendants().slice(1);
 
-        // Normalize for fixed-depth
+        
         nodes.forEach((d) => {
-          d.y = d.depth * 200;
+          d.y = d.depth * 220; 
         });
 
         // Update nodes
@@ -145,7 +149,8 @@ export default function TaxonomyTab() {
           .style("fill", "white")
           .style("stroke", "#4A90E2")
           .style("stroke-width", "2")
-          .style("cursor", "move");
+          .style("cursor", "move")
+          .style("transition", "all 0.3s ease"); 
 
         nodeEnter
           .append("text")
@@ -196,19 +201,30 @@ export default function TaxonomyTab() {
           .duration(750)
           .attr("transform", (d) => `translate(${d.x},${d.y})`);
 
+        
         nodeUpdate
           .select("rect")
           .on("mouseenter", function () {
-            d3.select(this)
-              .style("fill", "#f0f7ff")
+            const rect = d3.select(this);
+            rect
+              .transition()
+              .duration(200)
+              .style("fill", "#D6EAFF") 
               .style("stroke-width", "3")
-              .style("stroke", "#2196F3");
+              .style("stroke", "#1976D2") 
+              .attr("y", -42) 
+              .style("filter", "drop-shadow(0 6px 12px rgba(25, 118, 210, 0.4))"); 
           })
           .on("mouseleave", function () {
-            d3.select(this)
+            const rect = d3.select(this);
+            rect
+              .transition()
+              .duration(200)
               .style("fill", "white")
               .style("stroke-width", "2")
-              .style("stroke", "#4A90E2");
+              .style("stroke", "#4A90E2")
+              .attr("y", -40) 
+              .style("filter", "none");
           });
 
         // Exit
@@ -349,33 +365,61 @@ export default function TaxonomyTab() {
           onClick={() => setViewMode("tree")}
           style={{
             padding: "12px 24px",
-            backgroundColor: viewMode === "tree" ? "#4A90E2" : "white",
-            color: viewMode === "tree" ? "white" : "#333",
-            border: `2px solid ${viewMode === "tree" ? "#4A90E2" : "#ddd"}`,
+            backgroundColor: "white",
+            color: "#333",
+            border: "2px solid #ddd",
             borderRadius: "8px",
             cursor: "pointer",
             fontSize: "14px",
             fontWeight: "600",
-            transition: "all 0.3s ease",
+            transition: "all 0.2s ease",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = "translateY(-2px)";
+            e.currentTarget.style.backgroundColor = "#D6EAFF";
+            e.currentTarget.style.borderColor = "#1976D2";
+            e.currentTarget.style.color = "#1976D2";
+            e.currentTarget.style.boxShadow = "0 6px 12px rgba(25, 118, 210, 0.4)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = "translateY(0)";
+            e.currentTarget.style.backgroundColor = "white";
+            e.currentTarget.style.borderColor = "#ddd";
+            e.currentTarget.style.color = "#333";
+            e.currentTarget.style.boxShadow = "none";
           }}
         >
-          Tree View
+         Tree View
         </button>
         <button
           onClick={() => setViewMode("list")}
           style={{
             padding: "12px 24px",
-            backgroundColor: viewMode === "list" ? "#4A90E2" : "white",
-            color: viewMode === "list" ? "white" : "#333",
-            border: `2px solid ${viewMode === "list" ? "#4A90E2" : "#ddd"}`,
+            backgroundColor: "white",
+            color: "#333",
+            border: "2px solid #ddd",
             borderRadius: "8px",
             cursor: "pointer",
             fontSize: "14px",
             fontWeight: "600",
-            transition: "all 0.3s ease",
+            transition: "all 0.2s ease",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = "translateY(-2px)";
+            e.currentTarget.style.backgroundColor = "#D6EAFF";
+            e.currentTarget.style.borderColor = "#1976D2";
+            e.currentTarget.style.color = "#1976D2";
+            e.currentTarget.style.boxShadow = "0 6px 12px rgba(25, 118, 210, 0.4)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = "translateY(0)";
+            e.currentTarget.style.backgroundColor = "white";
+            e.currentTarget.style.borderColor = "#ddd";
+            e.currentTarget.style.color = "#333";
+            e.currentTarget.style.boxShadow = "none";
           }}
         >
-          List View
+         List View
         </button>
       </div>
 
