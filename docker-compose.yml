@@ -4,25 +4,91 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - backend
+      - api 
 
-  backend:
-    build: ./backend
-    environment:
-      - DB_URL=${DB_URL}         # <--- add this
-    ports:
-      - "4000:4000"
-
- 
-  mistral_7b:
+  #FastAPI Web Server (API Gateway & Synchronous Routes)
+  api:
     build:
-      context: ./backend/llms/mistral_7b
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dada_api
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    volumes:
+      - ./backend/app:/app
+    ports:
+      - "8001:8000"
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - DB_URL=${DB_URL}
+      - LLM_URL=${LLM_URL}
+    depends_on:
+      - redis
+      - postgres_db
+      - worker
+      - llm # Ensure LLM is up, though Celery handles the actual calls
+
+  # Celery Worker (Asynchronous Task Execution)    
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dada_worker
+    command: celery -A api.celery_app worker -l info --concurrency 2
+    volumes:
+      - ./backend/app:/app
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - DB_URL=${DB_URL}
+      - LLM_URL=${LLM_URL}
+    depends_on:
+      - redis
+      - postgres_db
+      - llm
+
+   # Redis (Celery Broker & Dynamic State Store)
+  redis:
+    image: redis:7-alpine
+    container_name: dada_redis
+    ports:
+      - "8002:6379"
+    volumes:
+      - redis_data:/data
+ 
+  llm:
+    build:
+      context: ./backend/llms/mistral_7b #change here when model file changes
     platform: linux/arm64/v8
-    container_name: mistral_7b_llm
+    container_name: mistral_7b_llm  #change here when model file changes
     ports:
       - "8080:8080"
     volumes:
-      - ./backend/llms/mistral_7b/model:/model
+      - ./backend/llms/mistral_7b/model:/model #change here when model file changes
+    # # >>> CRITICAL ADDITION FOR GPU ACCESS <<<
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all # Use 'all' to access all GPUs, equivalent to --gpus all
+    #           capabilities: [gpu]
+
+  slm:
+    build:
+      context: ./backend/llms/phi3_mini
+    platform: linux/arm64/v8
+    container_name: phi3_mini_slm  
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./backend/llms/phi3_mini/model:/model 
+    # # >>> CRITICAL ADDITION FOR GPU ACCESS <<<
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all # Use 'all' to access all GPUs, equivalent to --gpus all
+    #           capabilities: [gpu]
 
   postgres_db:
     image: postgres:15-alpine
@@ -38,5 +104,29 @@ services:
     ports:
       - "8000:5432"  # host:container
 
+  # Prometheus (Monitoring Backend)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: dada_prometheus
+    volumes:
+      - ./backend/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    command: --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - "8003:9090"
+  
+  # Grafana (Visualization Frontend)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: dada_grafana
+    ports:
+      - "8004:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
 volumes:
   pgdata:
+  redis_data:
+  postgres_data:
+  grafana_data:
