@@ -1,6 +1,9 @@
+
 const express = require('express');
 const cors = require('cors');
 const client = require('prom-client');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 app.use(cors());
@@ -139,6 +142,66 @@ app.get('/api/taxonomy', (req, res) => {
       { id: 2, attack: 'Prompt Injection' },
     ],
   });
+});
+
+// ── Dummy replay from JSON (simulate live metrics) ───────────────────────────
+let REPLAY_TIMER = null;
+
+// Start: POST /api/replay/start?paceMs=600&file=/app/data/final_results.json
+app.post('/api/replay/start', (req, res) => {
+  const paceMs = Number(req.query.paceMs || 600);
+  const file = req.query.file || '/app/data/final_results.json';
+
+  let rows;
+  try {
+    rows = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (e) {
+    return res.status(400).json({ ok: false, error: `Cannot read ${file}: ${e.message}` });
+  }
+
+  let i = 0;
+  if (REPLAY_TIMER) clearInterval(REPLAY_TIMER);
+
+  REPLAY_TIMER = setInterval(() => {
+    if (i >= rows.length) {
+      clearInterval(REPLAY_TIMER);
+      REPLAY_TIMER = null;
+      return;
+    }
+
+    const r = rows[i++];
+    const family  = r.attack_family || 'unknown';
+    const model   = r.model_name    || 'unknown';
+    const usecase = r.usecase       || 'unknown';
+    const defence = r.defended ? 'on' : 'none';
+    const reason  = r.error_reason || 'replay';
+    const base    = { family, model, usecase };
+
+    attacksStarted.inc(base);
+    runningAttacks.inc({ model });
+
+    const end = attackDuration.startTimer(base);
+    const durSec = Math.max(0.001, Number(r.latency || 0) / 1000);
+
+    setTimeout(() => {
+      end();
+      if (r.attack_success) {
+        attacksSucceeded.inc({ ...base, defence });
+      } else {
+        attacksFailed.inc({ ...base, reason });
+      }
+      runningAttacks.dec({ model });
+    }, durSec * 1000);
+  }, paceMs);
+
+  res.json({ ok: true, rows: rows.length, paceMs, file });
+});
+
+// Stop: POST /api/replay/stop
+app.post('/api/replay/stop', (_req, res) => {
+  if (REPLAY_TIMER) clearInterval(REPLAY_TIMER);
+  REPLAY_TIMER = null;
+  res.json({ ok: true });
 });
 
 // Prometheus metrics endpoint

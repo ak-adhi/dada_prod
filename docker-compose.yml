@@ -10,7 +10,8 @@ services:
     build: ./backend
     ports:
       - "4000:4000"
-
+    volumes: 
+      - ./backend/data:/app/data:ro
   prometheus:
     image: prom/prometheus:latest
     container_name: dada_prometheus

@@ -2,7 +2,7 @@ global:
   scrape_interval: 5s
 
 scrape_configs:
-  - job_name: "dada-express"
-    metrics_path: /metrics
+  - job_name: dada-backend
     static_configs:
-      - targets: ["backend:4000"]
+      - targets: ['backend:4000']   # container name + port where /metrics is served
+    scrape_interval: 5s
