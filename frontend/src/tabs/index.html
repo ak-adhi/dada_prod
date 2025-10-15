@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Prompt Attacks Taxonomy</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <header>
+        <h1><i class="fas fa-shield-alt"></i> LLM Prompt Attacks Taxonomy</h1>
+        <p>Comprehensive overview of prompt-based attacks on Large Language Models</p>
+    </header>
+
+    <div class="container">
+        <div class="filters">
+            <input type="text" id="searchInput" placeholder="Search attacks...">
+            <select id="familyFilter">
+                <option value="">All Attack Families</option>
+            </select>
+            <select id="usecaseFilter">
+                <option value="">All Usecases</option>
+            </select>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <h3>Total Attack Types</h3>
+                <span id="totalAttacks">0</span>
+            </div>
+            <div class="stat-card">
+                <h3>Attack Families</h3>
+                <span id="attackFamilies">0</span>
+            </div>
+            <div class="stat-card">
+                <h3>Usecases</h3>
+                <span id="usecasesCount">0</span>
+            </div>
+        </div>
+
+        <div id="attackGrid" class="attack-grid">
+            <!-- Attacks will be loaded here dynamically -->
+        </div>
+    </div>
+
+    <div id="attackModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+
+    <script src="data.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
