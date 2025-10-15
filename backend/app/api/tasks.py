@@ -3,7 +3,7 @@ from typing import Optional, List, Dict, Any, Tuple
 
 # Celery application instance and dependencies
 from api.celery_app import celery_app
-from api.dependencies import get_redis_client, ATTACK_PROGRESS_GAUGE
+from api.dependencies import get_redis_client, ATTACK_PROGRESS_GAUGE, update_attack_run_metrics
 # Core modules containing logic for DB, LLM, Defense, Evaluation, and TEMPLATING
 from api.core_modules import db_manager, LLMClient, apply_defense, evaluate_response, generate_templated_prompt
 
@@ -78,11 +78,15 @@ def _execute_single_run(
         # --- 2. APPLY DEFENSE (CONDITIONAL) ---
         if is_defence_enabled:
             # The defense module modifies the system prompt to include safety instructions
-            (
-                final_system_prompt, 
-                final_context, 
-                final_user_input
-            ) = apply_defense(base_system_prompt, retrieved_context, user_input, defense_type="PII_Filter")
+            # (
+            #     final_system_prompt, 
+            #     final_context, 
+            #     final_user_input
+            # ) = apply_defense(base_system_prompt, retrieved_context, user_input, defense_type="PII_Filter")
+            ################# Disabling defence for now
+            final_system_prompt = base_system_prompt
+            final_context = retrieved_context
+            final_user_input = user_input
         else:
             final_system_prompt = base_system_prompt
             final_context = retrieved_context
@@ -103,11 +107,16 @@ def _execute_single_run(
         llm_response_data = llm_client.query(final_prompt, stream=False)
         # latency is still calculated even though it's not logged, as it might be useful later.
         latency = (time.time() - start_time) * 1000 # convert to milliseconds 
-        llm_response = llm_response_data.get("text", "Error: No response from LLM.")
+        # llm_response = llm_response_data.get("text", "Error: No response from LLM.")
+        llm_response = llm_response_data
         print(llm_response)
 
         # --- EVALUATE RESPONSE ---
-        is_safe = evaluate_response(llm_response)
+        is_safe = evaluate_response(
+        llm_response,
+        attack_prompt=user_input,
+        system_prompt=base_system_prompt
+        )
         if not is_safe:
             successful_attacks += 1
             
@@ -251,8 +260,14 @@ def run_full_attack_family(
         'percent': 100,
         'last_attack': 'COMPLETED',
         'current_model': model_id,
+        'model_id': model_id, # Added for clarity in metric labeling
+        'usecase_id': usecase_id, # Added for clarity in metric labeling
+        'attacks_in_combination_count': len(run_combinations[0]['attacks']) if run_combinations else 0 # Assuming uniform size
     }
 
+    # CRITICAL: Update the Prometheus metrics with the final results
+    update_attack_run_metrics(final_result_payload)
+    
     # CRITICAL FIX: Explicitly set SUCCESS state to ensure front-end polling loop terminates cleanly
     self.update_state(state='SUCCESS', meta=final_result_payload)
     

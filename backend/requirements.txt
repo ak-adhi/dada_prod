@@ -6,6 +6,7 @@ celery
 prometheus_client
 httpx
 psycopg2-binary
+requests
 faiss-cpu>=1.12.0,<2.0.0
 sentence-transformers>=5.1.0,<6.0.0
 numpy>=2.0.0,<3.0.0
