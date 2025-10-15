@@ -1,6 +1,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Loader2, Zap, Monitor, CheckCircle, XCircle } from 'lucide-react'; // Added icons for visual feedback
 
+// --- Placeholder Constants for Grafana Integration ---
+// NOTE: You MUST update these constants to match your actual Grafana setup.
+const GRAFANA_HOST = 'http://localhost:8004'; // Change to your Grafana server address
+const GRAFANA_DASHBOARD_UID = 'dada_attack_monitor'; // Change to your dashboard UID
+const PROGRESS_GAUGE_PANEL_ID = 1; // Panel showing real-time progress gauge (dada_attack_progress_gauge)
+const RESULT_GAUGE_PANEL_ID = 2;   // Panel showing final success rate/count (dada_attack_success_rate_gauge, etc.)
+// ----------------------------------------------------
+
 export default function MainTab() {
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
@@ -12,13 +20,13 @@ export default function MainTab() {
   const [loadingData, setLoadingData] = useState(true);
   const [sessionId, setSessionId] = useState('');
   
-  // --- New State for Monitoring ---
+  // --- State for Monitoring ---
   const [isRunningAttack, setIsRunningAttack] = useState(false); 
   const [runId, setRunId] = useState(null); // Custom Business ID (for display)
-  const [taskUuid, setTaskUuid] = useState(null); // <-- NEW: Celery Task UUID (for polling)
+  const [taskUuid, setTaskUuid] = useState(null); // Celery Task UUID (for polling)
   const [attackProgress, setAttackProgress] = useState(null); 
   const [finalResult, setFinalResult] = useState(null); 
-  const [taskStatus, setTaskStatus] = useState(null); // NEW: To track raw Celery status (PENDING, STARTED, PROGRESS, SUCCESS, FAILURE)
+  const [taskStatus, setTaskStatus] = useState(null); // To track raw Celery status (PENDING, STARTED, PROGRESS, SUCCESS, FAILURE)
   
   const [systemMessage, setSystemMessage] = useState({ text: 'Ready to run a new attack.', type: 'info' });
 
@@ -131,7 +139,7 @@ export default function MainTab() {
       setFinalResult(null); // Clear previous results
       setAttackProgress(null); // Clear previous progress
       setTaskStatus(null); // Clear previous status
-      setTaskUuid(null); // <-- Clear previous Celery UUID
+      setTaskUuid(null); // Clear previous Celery UUID
       setIsRunningAttack(true); // Start running/polling state
 
       const modelId = selectedModel;
@@ -175,11 +183,11 @@ export default function MainTab() {
             setIsRunningAttack(false); // Stop running state if launch fails
         } else {
             const newRunId = data.run_id; // Custom Business ID
-            const newTaskUuid = data.redis_key_uuid; // <-- Capture the Celery UUID for polling
+            const newTaskUuid = data.redis_key_uuid; // Capture the Celery UUID for polling
             
             if (newRunId && newTaskUuid) {
                 setRunId(newRunId);
-                setTaskUuid(newTaskUuid); // <-- Set the Celery UUID
+                setTaskUuid(newTaskUuid); // Set the Celery UUID
                 
                 console.log('DEBUG: Attack launch successful. Run ID:', newRunId, ' | Task UUID:', newTaskUuid); 
                 setSystemMessage({ 
@@ -207,7 +215,7 @@ export default function MainTab() {
   }
 
   // --- 4. Polling Logic (`useEffect` and `fetchStatus`) (Updated to use taskUuid) ---
-  const fetchStatus = useCallback(async (currentTaskUuid) => { // <-- Function now accepts the UUID
+  const fetchStatus = useCallback(async (currentTaskUuid) => { // Function now accepts the UUID
     if (!currentTaskUuid) return;
 
     try {
@@ -238,7 +246,7 @@ export default function MainTab() {
             // Task completed, stop polling
             setIsRunningAttack(false); 
             setRunId(null);
-            setTaskUuid(null); // <-- Clear UUID to stop useEffect
+            setTaskUuid(null); // Clear UUID to stop useEffect
             
             console.log('DEBUG: FINAL RESULT METADATA:', metadata); 
             
@@ -279,11 +287,11 @@ export default function MainTab() {
   useEffect(() => {
     let intervalId;
 
-    if (isRunningAttack && taskUuid) { // <-- Now depends on taskUuid
+    if (isRunningAttack && taskUuid) { // Now depends on taskUuid
         console.log(`DEBUG: Starting polling interval for Celery UUID: ${taskUuid}`); 
         // Start polling every 1000ms (1 second)
         intervalId = setInterval(() => {
-            fetchStatus(taskUuid); // <-- Pass the taskUuid
+            fetchStatus(taskUuid); // Pass the taskUuid
         }, 1000); 
     }
 
@@ -294,7 +302,7 @@ export default function MainTab() {
             console.log(`DEBUG: Polling interval CLEARED.`); 
         }
     };
-  }, [isRunningAttack, taskUuid, fetchStatus]); // <-- taskUuid is now the polling key
+  }, [isRunningAttack, taskUuid, fetchStatus]); // taskUuid is now the polling key
 
 
   // --- 5. Reset Session Handler (updated) ---
@@ -308,7 +316,7 @@ export default function MainTab() {
     setSelectedAttackFamily('all'); 
     setIsDefenseEnabled(false);
     setRunId(null);
-    setTaskUuid(null); // <-- Clear new state
+    setTaskUuid(null); // Clear new state
     setAttackProgress(null);
     setFinalResult(null);
     setIsRunningAttack(false);
@@ -384,8 +392,15 @@ export default function MainTab() {
     if (!finalResult) return null;
 
     // These keys are expected to be present in the final dictionary returned by the Celery task (now in finalResult)
-    const totalAttacks = finalResult.attacks_run_combinations * (finalResult.attacks_in_combination_count || 1); // Added fallback to prevent NaN if count is missing
     const successful = finalResult.successful_attacks_total || 0;
+    
+    // Original calculation which resulted in the 800% error (e.g., 1 * 1 = 1)
+    const rawCalculatedTotal = (finalResult.attacks_run_combinations || 1) * (finalResult.attacks_in_combination_count || 1); 
+    
+    // FIX: The total executed count (denominator) MUST be at least as large as the successful count (numerator).
+    // This correction prevents mathematically impossible success rates (like 800%) due to misaligned backend counters.
+    const totalAttacks = Math.max(rawCalculatedTotal, successful);
+
     const failed = totalAttacks - successful;
     const successRate = totalAttacks > 0 ? (successful / totalAttacks * 100).toFixed(1) : 0;
     
@@ -416,12 +431,76 @@ export default function MainTab() {
                 </div>
             </div>
             <p className="text-center text-sm text-gray-500 mt-4">
-                Run ID: <code className="font-mono text-xs">{finalResult.run_id}</code> | Task UUID: <code className="font-mono text-xs">{finalResult.task_id}</code>
+                Run ID: <code className="font-mono text-xs">{finalResult.run_id}</code>
             </p>
         </div>
     );
   };
+  
+  // --- 7. Grafana Visualization Components ---
 
+  const renderGrafanaEmbed = (panelId, sessionId, taskUuid) => {
+      if (!sessionId) return null;
+
+      // Base URL structure for embedding a single panel
+      let url = `${GRAFANA_HOST}/d-solo/${GRAFANA_DASHBOARD_UID}/attack-monitoring?orgId=1&panelId=${panelId}&theme=light&from=now-5m`;
+
+      // Filter by session ID (Crucial for overall run grouping)
+      url += `&var-session_id=${sessionId}`;
+      
+      // Filter by task UUID (Only relevant for the progress gauge during the run)
+      if (taskUuid) {
+          url += `&var-task_id=${taskUuid}`;
+      }
+
+      return (
+          <iframe
+              src={url}
+              width="100%"
+              height="350" // Increased height for better visualization
+              frameBorder="0"
+              className="rounded-lg shadow-xl border border-gray-300"
+              title={`Grafana Panel ${panelId}`}
+          ></iframe>
+      );
+  };
+
+  const renderGrafanaVisualizations = () => {
+      // 1. Real-time Progress Gauge (Show while running)
+      if (isRunningAttack && taskUuid && sessionId) {
+          return (
+              <div className="mt-8 p-5 bg-white rounded-xl shadow-lg border border-2 border-indigo-500">
+                  <h3 className="text-xl font-bold text-indigo-600 flex items-center mb-4">
+                      <Monitor className="w-6 h-6 mr-2" />
+                      Real-time Attack Progress (Prometheus/Grafana)
+                  </h3>
+                  {renderGrafanaEmbed(PROGRESS_GAUGE_PANEL_ID, sessionId, taskUuid)}
+                  <p className="text-xs text-gray-500 mt-2 text-center">
+                      **NOTE:** Ensure Grafana is running at **{GRAFANA_HOST}** and panels are configured for **{GRAFANA_DASHBOARD_UID}**.
+                  </p>
+              </div>
+          );
+      }
+      
+      // 2. Final Results Metrics (Show after success/failure)
+      if (finalResult && sessionId) {
+          return (
+              <div className="mt-8 p-5 bg-white rounded-xl shadow-lg border border-2 border-green-500">
+                  <h3 className="text-xl font-bold text-green-600 flex items-center mb-4">
+                      <CheckCircle className="w-6 h-6 mr-2" />
+                      Final Attack Metrics (Prometheus/Grafana)
+                  </h3>
+                  {/* Task UUID is not needed here, only Session ID is used to group final success metrics */}
+                  {renderGrafanaEmbed(RESULT_GAUGE_PANEL_ID, sessionId, null)}
+                  <p className="text-xs text-gray-500 mt-2 text-center">
+                      Visualizing final metrics like <code>dada_attack_success_rate_gauge</code>, filtered by Session ID.
+                  </p>
+              </div>
+          );
+      }
+      
+      return null;
+  };
 
   // Define dynamic color for the system message box
   const getSystemMessageColor = (type) => {
@@ -439,147 +518,160 @@ export default function MainTab() {
   }
 
   return (
-    <section>
-      <h2 className="text-xl font-bold text-gray-800">Control Panel</h2>
-      <p className="mt-2 text-sm text-gray-600">
-        Configure the target model, domain, and defense status before launching an attack run.
-      </p>
+    <div className="relative"> {/* Added relative wrapper for the absolute positioned BETA marker */}
+      <section>
+        <h2 className="text-xl font-bold text-gray-800">Control Panel</h2>
+        <p className="mt-2 text-sm text-gray-600">
+          Configure the target model, domain, and defense status before launching an attack run.
+        </p>
 
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-        
-        {/* Attack families */}
-        <div className="p-4 rounded-lg bg-white shadow border border-gray-200">
-          <h3 className="font-medium text-gray-700">Attack families</h3>
-          <select
-            value={selectedAttackFamily}
-            onChange={(e) => setSelectedAttackFamily(e.target.value)}
-            className="mt-2 w-full border border-gray-300 rounded-md p-2 text-sm bg-white"
-            disabled={isRunningAttack}
-          >
-            <option value="all">ALL (Run all families)</option>
-            {attackFamilies.map((family) => (
-                <option key={family} value={family}>
-                    {family}
-                </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Models (Only 'mistral' available, 'ALL' option removed) */}
-         <div className="p-4 rounded-lg bg-white shadow border border-gray-200">
-            <h3 className="font-medium text-gray-700">Models</h3>
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          
+          {/* Attack families */}
+          <div className="p-4 rounded-lg bg-white shadow border border-gray-200">
+            <h3 className="font-medium text-gray-700">Attack families</h3>
             <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className="mt-2 w-full border border-gray-300 rounded-md p-2 text-sm bg-white"
-                disabled={isRunningAttack}
+              value={selectedAttackFamily}
+              onChange={(e) => setSelectedAttackFamily(e.target.value)}
+              className="mt-2 w-full border border-gray-300 rounded-md p-2 text-sm bg-white"
+              disabled={isRunningAttack}
             >
-                <option value="">Select model</option>
-                {models.map((model) => (
-                    <option key={model.llm_name} value={model.llm_name}>
-                        {model.llm_name}
-                    </option>
-                ))}
+              <option value="all">ALL (Run all families)</option>
+              {attackFamilies.map((family) => (
+                  <option key={family} value={family}>
+                      {family}
+                  </option>
+              ))}
             </select>
+          </div>
+
+          {/* Models (Only 'mistral' available, 'ALL' option removed) */}
+          <div className="p-4 rounded-lg bg-white shadow border border-gray-200">
+              <h3 className="font-medium text-gray-700">Models</h3>
+              <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className="mt-2 w-full border border-gray-300 rounded-md p-2 text-sm bg-white"
+                  disabled={isRunningAttack}
+              >
+                  <option value="">Select model</option>
+                  {models.map((model) => (
+                      <option key={model.llm_name} value={model.llm_name}>
+                          {model.llm_name}
+                      </option>
+                  ))}
+              </select>
+          </div>
+
+          {/* Usecases */}
+          <div className="p-4 rounded-lg bg-white shadow border border-gray-200">
+            <h3 className="font-medium text-gray-700">Usecases</h3>
+            <select
+                  value={selectedUsecase}
+                  onChange={(e) => setSelectedUsecase(e.target.value)}
+                  className="mt-2 w-full border border-gray-300 rounded-md p-2 text-sm bg-white"
+                  disabled={isRunningAttack}
+              >
+                  <option value="">Select usecase</option>
+                  <option value="all">ALL</option>
+                  {usecases.map((usecase) => (
+                      <option key={usecase.usecase_name} value={usecase.usecase_name}>
+                          {usecase.usecase_name}
+                      </option>
+                  ))}
+              </select>
+          </div>
         </div>
 
-        {/* Usecases */}
-        <div className="p-4 rounded-lg bg-white shadow border border-gray-200">
-          <h3 className="font-medium text-gray-700">Usecases</h3>
-          <select
-                value={selectedUsecase}
-                onChange={(e) => setSelectedUsecase(e.target.value)}
-                className="mt-2 w-full border border-gray-300 rounded-md p-2 text-sm bg-white"
-                disabled={isRunningAttack}
-            >
-                <option value="">Select usecase</option>
-                <option value="all">ALL</option>
-                {usecases.map((usecase) => (
-                    <option key={usecase.usecase_name} value={usecase.usecase_name}>
-                        {usecase.usecase_name}
-                    </option>
-                ))}
-            </select>
-        </div>
-      </div>
-
-      <div className="mt-6 flex gap-3 items-center">
-        {/* Run Attack Button */}
-        <button
-          onClick={handleRunAttack}
-          disabled={isRunningAttack || !selectedModel || selectedUsecase === ''}
-          className={`
-            px-6 py-2 rounded-lg text-white font-semibold transition-all duration-300 shadow-md 
-            ${isRunningAttack || !selectedModel || selectedUsecase === ''
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-red-600 hover:bg-red-700'
-            }
-          `}
-          onMouseEnter={(e) => !isRunningAttack && (e.currentTarget.style.boxShadow = '0 4px 20px rgba(255, 0, 0, 0.7)')}
-          onMouseLeave={(e) => e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)'}
-        >
-          {isRunningAttack ? (
-            <span className="flex items-center">
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Running ({taskStatus || 'Pending'} {attackProgress?.percent !== undefined ? attackProgress.percent.toFixed(0) : 0}%)
-            </span>
-          ) : (
-            'Run Attack'
-          )}
-        </button>
-
-        {/* Defense Toggle Implementation */}
-        <div className="flex items-center space-x-3 ml-4 p-2 rounded-lg bg-white shadow border border-1 border-brand-blue">
-          <span className="text-sm font-medium text-gray-700">Defence Status:</span>
-          
+        <div className="mt-6 flex gap-3 items-center">
+          {/* Run Attack Button */}
           <button
-            onClick={handleDefenseToggle}
+            onClick={handleRunAttack}
+            disabled={isRunningAttack || !selectedModel || selectedUsecase === ''}
             className={`
-              relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 
-              ${isDefenseEnabled ? 'bg-green-600 focus:ring-green-500' : 'bg-gray-400 focus:ring-gray-500'}
+              px-6 py-2 rounded-lg text-white font-semibold transition-all duration-300 shadow-md 
+              ${isRunningAttack || !selectedModel || selectedUsecase === ''
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-red-600 hover:bg-red-700'
+              }
             `}
-            role="switch"
-            aria-checked={isDefenseEnabled}
+            onMouseEnter={(e) => !isRunningAttack && (e.currentTarget.style.boxShadow = '0 4px 20px rgba(255, 0, 0, 0.7)')}
+            onMouseLeave={(e) => e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)'}
           >
-            <span
-              aria-hidden="true"
-              className={`
-                pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200
-                ${isDefenseEnabled ? 'translate-x-5' : 'translate-x-0'}
-              `}
-            ></span>
+            {isRunningAttack ? (
+              <span className="flex items-center">
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Running ({taskStatus || 'Pending'} {attackProgress?.percent !== undefined ? attackProgress.percent.toFixed(0) : 0}%)
+              </span>
+            ) : (
+              'Run Attack'
+            )}
           </button>
+
+          {/* Defense Toggle Implementation */}
+          <div className="flex items-center space-x-3 ml-4 p-2 rounded-lg bg-white shadow border border-1 border-brand-blue">
+            <span className="text-sm font-medium text-gray-700">Defence Status:</span>
+            
+            <button
+              onClick={handleDefenseToggle}
+              className={`
+                relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 
+                ${isDefenseEnabled ? 'bg-green-600 focus:ring-green-500' : 'bg-gray-400 focus:ring-gray-500'}
+              `}
+              role="switch"
+              aria-checked={isDefenseEnabled}
+            >
+              <span
+                aria-hidden="true"
+                className={`
+                  pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200
+                  ${isDefenseEnabled ? 'translate-x-5' : 'translate-x-0'}
+                `}
+              ></span>
+            </button>
+            
+            <span className={`text-sm font-semibold ${isDefenseEnabled ? 'text-green-600' : 'text-gray-500'}`}>
+              {isDefenseEnabled ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
           
-          <span className={`text-sm font-semibold ${isDefenseEnabled ? 'text-green-600' : 'text-gray-500'}`}>
-            {isDefenseEnabled ? 'Enabled' : 'Disabled'}
-          </span>
+          {/* Reset Session Button (NEW) */}
+          <button
+            onClick={handleResetSession}
+            className="ml-4 px-4 py-2 rounded-lg bg-yellow-500 text-white font-medium shadow transition-all duration-200 hover:bg-yellow-600"
+          >
+            Reset Session
+          </button>
+
         </div>
         
-        {/* Reset Session Button (NEW) */}
-        <button
-          onClick={handleResetSession}
-          className="ml-4 px-4 py-2 rounded-lg bg-yellow-500 text-white font-medium shadow transition-all duration-200 hover:bg-yellow-600"
-        >
-          Reset Session
-        </button>
+        {/* System Message Box */}
+        <div className={`mt-6 p-4 rounded-lg border-l-4 ${getSystemMessageColor(systemMessage.type)}`}>
+          <p className="text-sm font-medium">{systemMessage.text}</p>
+          <code className="text-xs font-mono opacity-80 mt-1 block">Session ID: {sessionId}</code>
+        </div>
 
-      </div>
+        {/* Live Monitoring Section (In-App) - Show while running or just after completion */}
+        {taskUuid && !finalResult && renderProgress()}
+        
+        {/* Final Results Section (In-App Summary) - Show only after finalResult is set */}
+        {finalResult && renderResults()}
+        
+        {/* Grafana Visualizations */}
+        {/* {renderGrafanaVisualizations()} */}
+
+      </section>
       
-      {/* System Message Box */}
-      <div className={`mt-6 p-4 rounded-lg border-l-4 ${getSystemMessageColor(systemMessage.type)}`}>
-        <p className="text-sm font-medium">{systemMessage.text}</p>
-        <code className="text-xs font-mono opacity-80 mt-1 block">Session ID: {sessionId}</code>
+      {/* BETA VERSION Marker (New element, absolutely positioned for top-right corner) */}
+      <div className="absolute top-3 right-6">
+        <span className="text-sm font-bold bg-yellow-300 text-black italic px-2 py-0.5 rounded-full shadow-md">
+          BETA Version
+        </span>
       </div>
-
-      {/* Live Monitoring Section - Show while running or just after completion */}
-      {taskUuid && !finalResult && renderProgress()}
-      
-      {/* Final Results Section - Show only after finalResult is set */}
-      {finalResult && renderResults()}
-
-    </section>
+    </div>
   );
+  
 }
