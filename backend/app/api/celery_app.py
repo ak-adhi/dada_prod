@@ -22,3 +22,10 @@ celery_app.conf.update(
     result_serializer='json',
     accept_content=['json'],
 )
+
+# --- START DIAGNOSTIC PRINT ---
+print(f"\n--- CELERY APP INITIALIZATION DEBUG ---")
+print(f"FastAPI Client Backend URL: {celery_app.conf.result_backend}")
+print(f"FastAPI Client Broker URL: {celery_app.conf.broker_url}")
+print(f"-----------------------------------------\n")
+# --- END DIAGNOSTIC PRINT ---
