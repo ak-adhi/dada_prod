@@ -674,11 +674,14 @@ class DBManager:
         query = "select distinct attack_family from dada.prompt_injection_attacks ORDER BY attack_family;"
         return self._execute_query(query)
     
-    def get_tax_tree(self) -> List[Dict[str, Any]]: #used for api endpoints
-        """Fetches the attack taxonomy tree (family and name combination)."""
-        query = """SELECT DISTINCT
+    def get_tax_tree(self) -> List[Dict[str, Any]]:
+        """Fetches available use cases from the dada.usecase_config table."""
+        query = """SELECT 
+                    attack_id as id,
                     attack_family,
-                    attack_name
+                    attack_name,
+                    attack_prompt,
+                    usecase
                     FROM
                     dada.prompt_injection_attacks
                     ORDER BY
