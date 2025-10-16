@@ -90,3 +90,4 @@ appendonly.aof
 
 # Index files
 /backend/data
+.env*
